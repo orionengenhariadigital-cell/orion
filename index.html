@@ -255,6 +255,17 @@
         <option value="revenda">Revenda (margem de revenda)</option>
       </select>
 
+      <label>Foto da peça (opcional)</label>
+      <div class="photo">
+        <img class="prev" id="o_prev" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' fill='%230a1322'/><text x='32' y='38' font-size='24' text-anchor='middle' fill='%238095b4'>📷</text></svg>">
+        <div class="btns">
+          <button onclick="document.getElementById('o_cam').click()">📷 Tirar foto</button>
+          <button onclick="document.getElementById('o_gal').click()">🖼️ Galeria</button>
+        </div>
+        <input id="o_cam" type="file" accept="image/*" capture="environment" style="display:none" onchange="pickPhoto(event,'o')">
+        <input id="o_gal" type="file" accept="image/*" style="display:none" onchange="pickPhoto(event,'o')">
+      </div>
+
       <label>Cores / filamentos usados (até 6)</label>
       <div id="o_cores"></div>
       <button class="addcor" onclick="addCorRowO()">+ adicionar cor</button>
@@ -287,8 +298,8 @@
       <div class="row">
         <div style="flex:1"><label>Valor do orçamento (R$)</label>
         <input id="o_valor" type="text" inputmode="decimal" placeholder="0,00"></div>
-        <div style="flex:1"><label>Desconto (R$)</label>
-        <input id="o_desc" type="text" inputmode="decimal" placeholder="0,00" oninput="calcOrc()"></div>
+        <div style="flex:1"><label>Desconto (%)</label>
+        <input id="o_desc" type="text" inputmode="decimal" placeholder="0" oninput="calcOrc()"></div>
       </div>
       <div class="calcbox big"><span>Valor final</span><b id="o_final" class="pos">R$ 0,00</b></div>
       <label>Medida da peça (cm)</label>
@@ -735,7 +746,7 @@ const EDIT_DEFS={
   orcamentos:{titulo:'Editar orçamento',campos:[
     {k:'nome',lbl:'Cliente / peça',tipo:'text'},
     {k:'valor',lbl:'Valor orçado (R$)',tipo:'num'},
-    {k:'desconto',lbl:'Desconto (R$)',tipo:'num'},
+    {k:'desconto_pct',lbl:'Desconto (%)',tipo:'num'},
     {k:'larg',lbl:'Largura (cm)',tipo:'num'},
     {k:'alt',lbl:'Altura (cm)',tipo:'num'},
     {k:'prof',lbl:'Profundidade (cm)',tipo:'num'},
@@ -884,7 +895,7 @@ function go(t){
 }
 
 /* ================= FOTOS (comprime no navegador) ================= */
-let pendingPhoto={v:null,f:null};
+let pendingPhoto={v:null,f:null,o:null};
 function pickPhoto(ev,which){
   const file=ev.target.files[0]; if(!file)return;
   const img=new Image(); const rd=new FileReader();
@@ -1141,26 +1152,28 @@ function calcOrc(){
   document.getElementById('o_sugerido').value=BRL(sug);
   document.getElementById('o_margemtag').textContent='×'+margem+(tipo==='revenda'?' (revenda)':'');
   const valor=numF(document.getElementById('o_valor').value);
-  const desconto=numF(document.getElementById('o_desc').value);
+  const descPct=numF(document.getElementById('o_desc').value);
+  const desconto=valor*descPct/100;
   const valorFinal=valor-desconto;
   const vf=document.getElementById('o_final');
-  if(vf){ vf.textContent=BRL(valorFinal)+(desconto>0?' (desconto '+BRL(desconto)+')':''); vf.className=valorFinal>=0?'pos':'neg'; }
+  if(vf){ vf.textContent=BRL(valorFinal)+(desconto>0?' (-'+descPct.toLocaleString('pt-BR')+'% = '+BRL(desconto)+')':''); vf.className=valorFinal>=0?'pos':'neg'; }
   const lucro=valorFinal-custo;
   const l=document.getElementById('o_lucro');l.textContent=BRL(lucro);l.className=lucro>=0?'pos':'neg';
   const pct=valorFinal>0?Math.round(lucro/valorFinal*100):0;
   const lp=document.getElementById('o_lucropct');
   if(lp){ lp.textContent=valorFinal>0?'('+pct+'%)':''; lp.className=lucro>=0?'pos':'neg'; }
-  return {gTotal,custo,cores,perda,tempo,trabMin,valor:valorFinal,desconto};
+  return {gTotal,custo,cores,perda,tempo,trabMin,valor:valorFinal,desconto,descPct};
 }
 async function salvarOrcamento(){
   const nome=(document.getElementById('o_nome').value||'').trim();
-  const {gTotal,custo,cores,perda,tempo,trabMin,valor,desconto}=calcOrc();
+  const {gTotal,custo,cores,perda,tempo,trabMin,valor,desconto,descPct}=calcOrc();
   if(!nome){toast('Dê um nome ao orçamento',true);return}
   if(!cores.length){toast('Adicione ao menos 1 cor',true);return}
+  let foto_url=null; if(pendingPhoto.o){ toast('Enviando foto...'); foto_url=await uploadPhoto(pendingPhoto.o); }
   const ins=await sb.from('orcamentos').insert({
     nome,gramas:gTotal,perda_g:perda,tempo_horas:tempo,trab_min:trabMin,
     cores:cores.map(c=>{const f=db.filamentos.find(x=>x.id===c.filId);return{filId:c.filId,tipo:f?f.tipo:'',cor:f?nomeFil(f):'',g:c.g}}),
-    custo,valor,desconto,obs:(document.getElementById('o_obs').value||'').trim(),
+    custo,valor,desconto,desconto_pct:descPct,foto_url,obs:(document.getElementById('o_obs').value||'').trim(),
     larg:numF(document.getElementById('o_larg').value),
     alt:numF(document.getElementById('o_alt').value),
     prof:numF(document.getElementById('o_prof').value),
@@ -1171,6 +1184,7 @@ async function salvarOrcamento(){
   }).select();
   if(ins.error){toast('Erro: '+ins.error.message,true);return}
   ['o_nome','o_th','o_tm','o_trab','o_perda','o_valor','o_obs','o_larg','o_alt','o_prof','o_prazo','o_desc'].forEach(i=>document.getElementById(i).value='');
+  pendingPhoto.o=null; const op=document.getElementById('o_prev'); if(op)op.src='';
   document.getElementById('o_cores').innerHTML='';
   await carregarTudo(); calcOrc(); toast('Orçamento salvo ✓');
 }
@@ -1184,7 +1198,7 @@ function msgOrcamento(o){
   if(med.some(x=>x>0)){ txt+='*Medida:* '+med.map(x=>x.toLocaleString('pt-BR')).join(' x ')+' cm\n'; }
   if((+o.desconto)>0){
     txt+='*Valor:* '+BRL((+o.valor)+(+o.desconto))+'\n';
-    txt+='*Desconto:* '+BRL(o.desconto)+'\n';
+    txt+='*Desconto:* '+((+o.desconto_pct)>0?(+o.desconto_pct).toLocaleString('pt-BR')+'% (':'')+BRL(o.desconto)+((+o.desconto_pct)>0?')':'')+'\n';
     txt+='*Valor final:* '+BRL(o.valor)+'\n';
   } else {
     txt+='*Valor:* '+BRL(o.valor)+'\n';
@@ -1552,7 +1566,7 @@ function renderOrc(){
     const pctO=valorOriginal>0?Math.round(lucroO/valorOriginal*100):0;
     const cls=lucroO>=0?'pos':'neg';
     const badge=o.status==='aprovado'?'<span class="badge" style="background:var(--green)">aprovado</span>':'';
-    return `<div class="item"><div class="main">
+    return `<div class="item">${o.foto_url?`<img class="thumb" src="${o.foto_url}">`:''}<div class="main">
       <div class="t">${o.nome} ${badge} <span class="badge" style="background:var(--panel-2);color:var(--muted)">${diasTxt}</span></div>
       <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · custo ${BRL(o.custo)}${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.obs?'<br>📝 '+o.obs:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
