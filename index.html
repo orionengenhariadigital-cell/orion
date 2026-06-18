@@ -152,7 +152,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.1</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.2</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -1248,7 +1248,12 @@ async function salvarOrcamento(){
   document.getElementById('o_cores').innerHTML='';
   await carregarTudo(); calcOrc(); toast('Orçamento salvo ✓');
 }
-async function delOrc(id){ if(!confirm('Remover este orçamento?'))return; await sb.from('orcamentos').delete().eq('id',id); await carregarTudo(); }
+async function delOrc(id){
+  const o=db.orcamentos.find(x=>x.id===id);
+  const nome=o?(o.numero?nfOrc(o.numero)+' - ':'')+o.nome:'este orçamento';
+  if(!confirm('⚠️ Excluir o orçamento:\n\n"'+nome+'"\n\nEssa ação NÃO pode ser desfeita. Tem certeza?'))return;
+  await sb.from('orcamentos').delete().eq('id',id); await carregarTudo(); toast('Orçamento excluído');
+}
 async function orcStatus(id,status){
   await sb.from('orcamentos').update({status}).eq('id',id);
   await carregarTudo();
@@ -1779,7 +1784,12 @@ async function registrarVenda(){
   document.getElementById('v_produto').value='';
   await carregarTudo(); calcVenda(); toast('Venda registrada ✓');
 }
-async function delVenda(id){ if(!confirm('Excluir venda? O filamento não volta ao estoque.'))return; await sb.from('vendas').delete().eq('id',id); await carregarTudo(); }
+async function delVenda(id){
+  const v=db.vendas.find(x=>x.id===id);
+  const nome=v?(v.numero?nfVenda(v.numero)+' - ':'')+v.nome:'esta venda';
+  if(!confirm('⚠️ Excluir a venda:\n\n"'+nome+'"\n\nO filamento NÃO volta ao estoque e essa ação NÃO pode ser desfeita. Tem certeza?'))return;
+  await sb.from('vendas').delete().eq('id',id); await carregarTudo(); toast('Venda excluída');
+}
 function renderVendas(){
   const box=document.getElementById('listaVendas');
   document.getElementById('vendaCount').textContent=db.vendas.length?db.vendas.length+' registros':'';
