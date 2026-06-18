@@ -168,6 +168,8 @@
     <button class="out" onclick="sair()">Sair</button>
   </header>
 
+  <div id="avisoEstoque" style="display:none;background:rgba(255,181,71,.12);border:1px solid var(--amber);border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:var(--amber);cursor:pointer" onclick="go('fil')"></div>
+
   <div class="summary">
     <div class="stat lucro"><div class="k">Lucro total</div><div class="v" id="sumLucro">R$ 0,00</div><div class="sub" id="sumVendas">0 vendas</div></div>
     <div class="stat"><div class="k">Faturamento</div><div class="v" id="sumFat">R$ 0,00</div><div class="sub" id="sumCusto">Custo R$ 0,00</div></div>
@@ -241,6 +243,7 @@
     </div>
 
     <h2 class="sec">Vendas recentes <span class="count" id="vendaCount"></span></h2>
+    <input id="buscaVenda" type="text" placeholder="🔍 Buscar venda por nome..." autocomplete="off" oninput="renderVendas()" style="margin-bottom:10px">
     <div id="listaVendas"></div>
   </section>
 
@@ -331,6 +334,7 @@
     </div>
 
     <h2 class="sec">Orçamentos salvos <span class="count" id="orcCount"></span></h2>
+    <input id="buscaOrc" type="text" placeholder="🔍 Buscar orçamento por nome..." autocomplete="off" oninput="renderOrc()" style="margin-bottom:10px">
     <div id="listaOrc"></div>
 
     <h2 class="sec">🖨️ Impressões próprias <span class="count" id="impCount"></span></h2>
@@ -501,6 +505,12 @@
       <small class="note">Esses valores entram no cálculo automático do custo de cada peça.</small>
     </div>
 
+    <h2 class="sec">💾 Backup dos dados</h2>
+    <div class="card">
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Baixe uma cópia de segurança de todos os seus dados (filamentos, vendas, orçamentos, peças...). Guarde o arquivo num lugar seguro.</p>
+      <button class="act" onclick="exportarBackup()">⬇️ Baixar backup completo</button>
+    </div>
+
     <h2 class="sec">🎨 Personalização (tema)</h2>
     <div class="card">
       <label>Cor principal (botões, destaques)</label>
@@ -654,6 +664,16 @@
 
   <section id="tab-graf">
     <h2 class="sec">Resumo</h2>
+
+    <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(31,143,255,.12),rgba(31,143,255,.03))">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0;font-size:15px">📅 Fechamento do mês</h3>
+        <select id="mesResumo" onchange="renderFechamento()" style="width:auto;padding:6px 10px;font-size:13px"></select>
+      </div>
+      <div id="fechamentoBox" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+      <div id="orcConversao" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)"></div>
+    </div>
+
     <div class="summary" style="margin-bottom:16px">
       <div class="stat"><div class="k">Perda total</div><div class="v" id="kPerdaG" style="color:var(--red)">0 g</div><div class="sub" id="kPerdaR">R$ 0,00 desperdiçado</div></div>
       <div class="stat"><div class="k">Margem média</div><div class="v" id="kMargem" style="color:var(--green-soft)">0%</div><div class="sub">lucro ÷ faturamento</div></div>
@@ -1225,6 +1245,11 @@ async function salvarOrcamento(){
   await carregarTudo(); calcOrc(); toast('Orçamento salvo ✓');
 }
 async function delOrc(id){ if(!confirm('Remover este orçamento?'))return; await sb.from('orcamentos').delete().eq('id',id); await carregarTudo(); }
+async function orcStatus(id,status){
+  await sb.from('orcamentos').update({status}).eq('id',id);
+  await carregarTudo();
+  toast(status==='aprovado'?'Orçamento aprovado ✓':status==='recusado'?'Orçamento recusado':'Orçamento reaberto');
+}
 function msgOrcamento(o){
   let txt='*Orion Engenharia Impressão 3D*\n\n';
   txt+='*Orçamento*\n';
@@ -1593,7 +1618,10 @@ function renderOrc(){
   const box=document.getElementById('listaOrc'); if(!box)return;
   document.getElementById('orcCount').textContent=db.orcamentos.length?db.orcamentos.length+' salvos':'';
   if(!db.orcamentos.length){box.innerHTML='<div class="empty"><span class="em">📄</span>Nenhum orçamento ainda.</div>';return}
-  box.innerHTML=db.orcamentos.map(o=>{
+  const busca=(document.getElementById('buscaOrc')?.value||'').toLowerCase().trim();
+  const listaO=busca?db.orcamentos.filter(o=>(o.nome||'').toLowerCase().includes(busca)):db.orcamentos;
+  if(!listaO.length){box.innerHTML='<div class="empty" style="padding:14px">Nenhum orçamento encontrado.</div>';return}
+  box.innerHTML=listaO.map(o=>{
     const dias=Math.floor((Date.now()-new Date(o.criado_em).getTime())/86400000);
     const diasTxt=dias<=0?'hoje':(dias===1?'há 1 dia':'há '+dias+' dias');
     const d=new Date(o.criado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
@@ -1601,7 +1629,7 @@ function renderOrc(){
     const valorOriginal=(+o.desconto)>0?(+o.valor)+(+o.desconto):(+o.valor);
     const pctO=valorOriginal>0?Math.round(lucroO/valorOriginal*100):0;
     const cls=lucroO>=0?'pos':'neg';
-    const badge=o.status==='aprovado'?'<span class="badge" style="background:var(--green)">aprovado</span>':'';
+    const badge=o.status==='aprovado'?'<span class="badge" style="background:var(--green)">✓ aprovado</span>':(o.status==='recusado'?'<span class="badge" style="background:var(--red)">✕ recusado</span>':'');
     return `<div class="item">${o.foto_url?`<img class="thumb" src="${o.foto_url}">`:''}<div class="main">
       <div class="t">${o.nome} ${badge} <span class="badge" style="background:var(--panel-2);color:var(--muted)">${diasTxt}</span></div>
       <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · custo ${BRL(o.custo)}${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.obs?'<br>📝 '+o.obs:''}</div>
@@ -1609,6 +1637,8 @@ function renderOrc(){
         <button class="addcor" style="margin:0;flex:1;min-width:130px" onclick="orcVirarVenda('${o.id}')">➡️ Virar venda</button>
         <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:#25d366;color:#25d366" onclick="enviarWhatsFixo('${o.id}')">📱 Meu Whats</button>
         <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:#25d366;color:#25d366" onclick="enviarWhatsOutro('${o.id}')">📱 Outro número</button>
+        ${o.status!=='aprovado'?`<button class="addcor" style="margin:0;flex:1;min-width:100px;border-color:var(--green);color:var(--green)" onclick="orcStatus('${o.id}','aprovado')">✓ Aprovado</button>`:''}
+        ${o.status!=='recusado'?`<button class="addcor" style="margin:0;flex:1;min-width:100px;border-color:var(--red);color:var(--red)" onclick="orcStatus('${o.id}','recusado')">✕ Recusado</button>`:`<button class="addcor" style="margin:0;flex:1;min-width:100px" onclick="orcStatus('${o.id}','aberto')">↺ Reabrir</button>`}
       </div>
       </div>
       <div class="right"><div class="big ${cls}">${BRL(o.valor)}</div><div class="lbl">orçado</div></div>
@@ -1746,7 +1776,10 @@ function renderVendas(){
   const box=document.getElementById('listaVendas');
   document.getElementById('vendaCount').textContent=db.vendas.length?db.vendas.length+' registros':'';
   if(!db.vendas.length){box.innerHTML='<div class="empty"><span class="em">📦</span>Nenhuma venda ainda.</div>';return}
-  box.innerHTML=db.vendas.slice(0,40).map(v=>{
+  const busca=(document.getElementById('buscaVenda')?.value||'').toLowerCase().trim();
+  const listaV=busca?db.vendas.filter(v=>(v.nome||'').toLowerCase().includes(busca)):db.vendas;
+  if(!listaV.length){box.innerHTML='<div class="empty" style="padding:14px">Nenhuma venda encontrada.</div>';return}
+  box.innerHTML=listaV.slice(0,40).map(v=>{
     const d=new Date(v.criado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
     const cls=v.lucro>=0?'pos':'neg';
     const thumb=v.foto_url?`<img class="thumb" src="${v.foto_url}">`:'';
@@ -1833,6 +1866,25 @@ function carregarTema(){
   const b=document.getElementById('t_brand'),s=document.getElementById('t_soft'),g=document.getElementById('t_bg');
   if(b)b.value=t.brand; if(s)s.value=t.soft; if(g)g.value=t.bg;
 }
+/* ===== BACKUP ===== */
+function exportarBackup(){
+  const dados={
+    exportado_em:new Date().toISOString(),
+    negocio:'Orion Engenharia - Impressão 3D',
+    filamentos:db.filamentos, vendas:db.vendas, orcamentos:db.orcamentos,
+    pecas:db.pecas, acessorios:db.acessorios, maquinas:db.maquinas,
+    manutencoes:db.manutencoes, impressoes:db.impressoes, perdas:db.perdas,
+    config:db.config
+  };
+  const blob=new Blob([JSON.stringify(dados,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='backup-orion-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Backup baixado ✓');
+}
+
 function salvarTema(){
   const t={brand:document.getElementById('t_brand').value,soft:document.getElementById('t_soft').value,bg:document.getElementById('t_bg').value};
   try{ localStorage.setItem('orion_tema',JSON.stringify(t)); }catch(e){}
@@ -2024,7 +2076,41 @@ async function reverter(histId){
 }
 
 /* ================= RESUMO + GRÁFICOS ================= */
+function renderFechamento(){
+  const sel=document.getElementById('mesResumo'); if(!sel)return;
+  // monta lista de meses com vendas
+  const meses=[...new Set(db.vendas.map(v=>(v.criado_em||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  const mesAtual=new Date().toISOString().slice(0,7);
+  if(!meses.includes(mesAtual)) meses.unshift(mesAtual);
+  if(!sel.dataset.init || sel.options.length!==meses.length){
+    const atual=sel.value;
+    sel.innerHTML=meses.map(m=>{
+      const [a,mm]=m.split('-');
+      const nome=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][+mm-1]+'/'+a;
+      return `<option value="${m}">${nome}</option>`;
+    }).join('');
+    sel.value=atual||mesAtual; sel.dataset.init='1';
+  }
+  const mes=sel.value||mesAtual;
+  const vMes=db.vendas.filter(v=>(v.criado_em||'').slice(0,7)===mes);
+  const fat=vMes.reduce((s,v)=>s+(+v.venda||0),0);
+  const luc=vMes.reduce((s,v)=>s+(+v.lucro||0),0);
+  const cus=vMes.reduce((s,v)=>s+(+v.custo||0),0);
+  // perdas do mês
+  const pMes=db.perdas.filter(p=>(p.data||'').slice(0,7)===mes).reduce((s,p)=>s+(+p.custo||0),0);
+  const box=document.getElementById('fechamentoBox');
+  const card=(lbl,val,cor)=>`<div style="background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px"><div style="font-size:11px;color:var(--muted)">${lbl}</div><div style="font-size:17px;font-weight:800;color:${cor||'var(--ink)'}">${val}</div></div>`;
+  box.innerHTML=card('Faturamento',BRL(fat),'var(--brand-soft)')+card('Lucro',BRL(luc),'var(--green-soft)')+card('Custo',BRL(cus))+card('Vendas',vMes.length+' un');
+  // conversão de orçamentos do mês
+  const oMes=db.orcamentos.filter(o=>(o.criado_em||'').slice(0,7)===mes);
+  const aprov=oMes.filter(o=>o.status==='aprovado').length;
+  const recus=oMes.filter(o=>o.status==='recusado').length;
+  const conv=oMes.length?Math.round(aprov/oMes.length*100):0;
+  const oc=document.getElementById('orcConversao');
+  if(oc) oc.innerHTML=`📄 Orçamentos no mês: <b>${oMes.length}</b> · ✓ aprovados: <b style="color:var(--green-soft)">${aprov}</b> · ✕ recusados: <b style="color:var(--red)">${recus}</b> · conversão: <b>${conv}%</b>${pMes>0?'<br>🗑️ Perdas no mês: <b style="color:var(--red)">'+BRL(pMes)+'</b>':''}`;
+}
 function renderResumo(){
+  renderFechamento();
   const fat=db.vendas.reduce((s,v)=>s+(+v.venda),0);
   const custo=db.vendas.reduce((s,v)=>s+(+v.custo),0);
   const lucro=db.vendas.reduce((s,v)=>s+(+v.lucro),0);
@@ -2116,7 +2202,16 @@ function refreshCorRows(){
     sel.value=atual;
   });
 }
-function renderTudo(){ renderFil(); renderInvSelect(); renderMaq(); renderMt(); renderAc(); renderLk(); renderOrc(); renderImp(); renderPd(); renderPecas(); renderProdutos(); renderVendas(); renderHist(); renderResumo(); fillConfigForm(); if(!document.querySelectorAll('#v_cores .cor-row').length) addCorRow(); refreshCorRows(); refreshAcRows('v'); refreshAcRows('o'); calcVenda(); injectCalcIcons(); }
+function renderTudo(){ renderFil(); renderInvSelect(); renderMaq(); renderMt(); renderAc(); renderLk(); renderOrc(); renderImp(); renderPd(); renderPecas(); renderProdutos(); renderVendas(); renderHist(); renderResumo(); renderAvisoEstoque(); fillConfigForm(); if(!document.querySelectorAll('#v_cores .cor-row').length) addCorRow(); refreshCorRows(); refreshAcRows('v'); refreshAcRows('o'); calcVenda(); injectCalcIcons(); }
+function renderAvisoEstoque(){
+  const el=document.getElementById('avisoEstoque'); if(!el)return;
+  const baixos=db.filamentos.filter(f=>(+f.restante)<150);
+  if(!baixos.length){ el.style.display='none'; return; }
+  const nomes=baixos.slice(0,3).map(f=>nomeFil(f)).join(', ');
+  const resto=baixos.length>3?' e mais '+(baixos.length-3):'';
+  el.innerHTML='⚠️ <b>'+baixos.length+' filamento'+(baixos.length>1?'s':'')+' acabando:</b> '+nomes+resto+' · toque para ver';
+  el.style.display='block';
+}
 
 /* binds */
 ['v_th','v_tm','v_trab','v_maq','v_venda','v_perda'].forEach(id=>document.addEventListener('input',e=>{if(e.target.id===id)calcVenda()}));
