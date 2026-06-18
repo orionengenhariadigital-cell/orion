@@ -284,8 +284,13 @@
 
       <label>Preço sugerido (custo × margem) <span id="o_margemtag" style="color:var(--brand-soft)"></span></label>
       <input id="o_sugerido" type="text" readonly style="color:var(--brand-soft);font-weight:800">
-      <label>Valor do orçamento (R$)</label>
-      <input id="o_valor" type="text" inputmode="decimal" placeholder="0,00">
+      <div class="row">
+        <div style="flex:1"><label>Valor do orçamento (R$)</label>
+        <input id="o_valor" type="text" inputmode="decimal" placeholder="0,00"></div>
+        <div style="flex:1"><label>Desconto (R$)</label>
+        <input id="o_desc" type="text" inputmode="decimal" placeholder="0,00" oninput="calcOrc()"></div>
+      </div>
+      <div class="calcbox big"><span>Valor final</span><b id="o_final" class="pos">R$ 0,00</b></div>
       <label>Medida da peça (cm)</label>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <input id="o_larg" type="text" inputmode="decimal" placeholder="largura">
@@ -730,6 +735,7 @@ const EDIT_DEFS={
   orcamentos:{titulo:'Editar orçamento',campos:[
     {k:'nome',lbl:'Cliente / peça',tipo:'text'},
     {k:'valor',lbl:'Valor orçado (R$)',tipo:'num'},
+    {k:'desconto',lbl:'Desconto (R$)',tipo:'num'},
     {k:'larg',lbl:'Largura (cm)',tipo:'num'},
     {k:'alt',lbl:'Altura (cm)',tipo:'num'},
     {k:'prof',lbl:'Profundidade (cm)',tipo:'num'},
@@ -1135,22 +1141,26 @@ function calcOrc(){
   document.getElementById('o_sugerido').value=BRL(sug);
   document.getElementById('o_margemtag').textContent='×'+margem+(tipo==='revenda'?' (revenda)':'');
   const valor=numF(document.getElementById('o_valor').value);
-  const lucro=valor-custo;
+  const desconto=numF(document.getElementById('o_desc').value);
+  const valorFinal=valor-desconto;
+  const vf=document.getElementById('o_final');
+  if(vf){ vf.textContent=BRL(valorFinal)+(desconto>0?' (desconto '+BRL(desconto)+')':''); vf.className=valorFinal>=0?'pos':'neg'; }
+  const lucro=valorFinal-custo;
   const l=document.getElementById('o_lucro');l.textContent=BRL(lucro);l.className=lucro>=0?'pos':'neg';
-  const pct=valor>0?Math.round(lucro/valor*100):0;
+  const pct=valorFinal>0?Math.round(lucro/valorFinal*100):0;
   const lp=document.getElementById('o_lucropct');
-  if(lp){ lp.textContent=valor>0?'('+pct+'%)':''; lp.className=lucro>=0?'pos':'neg'; }
-  return {gTotal,custo,cores,perda,tempo,trabMin,valor};
+  if(lp){ lp.textContent=valorFinal>0?'('+pct+'%)':''; lp.className=lucro>=0?'pos':'neg'; }
+  return {gTotal,custo,cores,perda,tempo,trabMin,valor:valorFinal,desconto};
 }
 async function salvarOrcamento(){
   const nome=(document.getElementById('o_nome').value||'').trim();
-  const {gTotal,custo,cores,perda,tempo,trabMin,valor}=calcOrc();
+  const {gTotal,custo,cores,perda,tempo,trabMin,valor,desconto}=calcOrc();
   if(!nome){toast('Dê um nome ao orçamento',true);return}
   if(!cores.length){toast('Adicione ao menos 1 cor',true);return}
   const ins=await sb.from('orcamentos').insert({
     nome,gramas:gTotal,perda_g:perda,tempo_horas:tempo,trab_min:trabMin,
     cores:cores.map(c=>{const f=db.filamentos.find(x=>x.id===c.filId);return{filId:c.filId,tipo:f?f.tipo:'',cor:f?nomeFil(f):'',g:c.g}}),
-    custo,valor,obs:(document.getElementById('o_obs').value||'').trim(),
+    custo,valor,desconto,obs:(document.getElementById('o_obs').value||'').trim(),
     larg:numF(document.getElementById('o_larg').value),
     alt:numF(document.getElementById('o_alt').value),
     prof:numF(document.getElementById('o_prof').value),
@@ -1160,7 +1170,7 @@ async function salvarOrcamento(){
     maquina_id:document.getElementById('o_maq').value||null, status:'aberto'
   }).select();
   if(ins.error){toast('Erro: '+ins.error.message,true);return}
-  ['o_nome','o_th','o_tm','o_trab','o_perda','o_valor','o_obs','o_larg','o_alt','o_prof','o_prazo'].forEach(i=>document.getElementById(i).value='');
+  ['o_nome','o_th','o_tm','o_trab','o_perda','o_valor','o_obs','o_larg','o_alt','o_prof','o_prazo','o_desc'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('o_cores').innerHTML='';
   await carregarTudo(); calcOrc(); toast('Orçamento salvo ✓');
 }
@@ -1172,7 +1182,13 @@ function msgOrcamento(o){
   if(o.cores&&o.cores.length){ txt+='*Cores:* '+o.cores.map(c=>c.cor||c.tipo).join(', ')+'\n'; }
   const med=[o.larg,o.alt,o.prof].map(x=>+x||0);
   if(med.some(x=>x>0)){ txt+='*Medida:* '+med.map(x=>x.toLocaleString('pt-BR')).join(' x ')+' cm\n'; }
-  txt+='*Valor:* '+BRL(o.valor)+'\n';
+  if((+o.desconto)>0){
+    txt+='*Valor:* '+BRL((+o.valor)+(+o.desconto))+'\n';
+    txt+='*Desconto:* '+BRL(o.desconto)+'\n';
+    txt+='*Valor final:* '+BRL(o.valor)+'\n';
+  } else {
+    txt+='*Valor:* '+BRL(o.valor)+'\n';
+  }
   if(o.entrega) txt+='*Entrega:* '+o.entrega+'\n';
   if(o.prazo) txt+='*Prazo:* '+o.prazo+'\n';
   txt+='\n*Pagamento:*\nPix (chave: orionengenhariadigital@gmail.com)\nou Cartão de crédito\n';
@@ -1532,12 +1548,13 @@ function renderOrc(){
     const diasTxt=dias<=0?'hoje':(dias===1?'há 1 dia':'há '+dias+' dias');
     const d=new Date(o.criado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
     const lucroO=(+o.valor||0)-(+o.custo||0);
-    const pctO=(+o.valor)>0?Math.round(lucroO/(+o.valor)*100):0;
+    const valorOriginal=(+o.desconto)>0?(+o.valor)+(+o.desconto):(+o.valor);
+    const pctO=valorOriginal>0?Math.round(lucroO/valorOriginal*100):0;
     const cls=lucroO>=0?'pos':'neg';
     const badge=o.status==='aprovado'?'<span class="badge" style="background:var(--green)">aprovado</span>':'';
     return `<div class="item"><div class="main">
       <div class="t">${o.nome} ${badge} <span class="badge" style="background:var(--panel-2);color:var(--muted)">${diasTxt}</span></div>
-      <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · custo ${BRL(o.custo)} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.obs?'<br>📝 '+o.obs:''}</div>
+      <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · custo ${BRL(o.custo)}${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.obs?'<br>📝 '+o.obs:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button class="addcor" style="margin:0;flex:1;min-width:130px" onclick="orcVirarVenda('${o.id}')">➡️ Virar venda</button>
         <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:#25d366;color:#25d366" onclick="enviarWhatsFixo('${o.id}')">📱 Meu Whats</button>
@@ -1550,8 +1567,8 @@ function renderOrc(){
 }
 function orcVirarVenda(id){
   const o=db.orcamentos.find(x=>x.id===id); if(!o)return;
-  // preenche a aba Venda com os dados do orçamento
   go('venda');
+  window.scrollTo(0,0);
   document.getElementById('v_nome').value=o.nome||'';
   const th=Math.floor(o.tempo_horas||0), tm=Math.round(((o.tempo_horas||0)-th)*60);
   document.getElementById('v_th').value=th||''; document.getElementById('v_tm').value=tm||'';
