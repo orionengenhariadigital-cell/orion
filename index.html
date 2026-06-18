@@ -71,9 +71,11 @@
   button.act{width:100%;margin-top:16px;border:0;border-radius:13px;padding:14px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;color:#fff;background:linear-gradient(135deg,#1f8fff,#0b66d0);box-shadow:0 8px 20px rgba(31,143,255,.45)}
   button.act.green{background:linear-gradient(135deg,#22b365,#2ed47a);box-shadow:0 8px 20px rgba(46,212,122,.35)}
   button.act:active{transform:translateY(1px)}
-  button.act.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);box-shadow:none;font-weight:600}
+  button.act.ghost{background:rgba(255,255,255,.06);border:1.5px solid var(--brand-soft);color:var(--brand-soft);box-shadow:none;font-weight:700}
 
   .calcbox{background:var(--calc-bg,#0a1322);border:1px dashed var(--calc-brd,var(--line));border-radius:12px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--calc-txt,var(--muted));display:flex;justify-content:space-between;align-items:center}
+  .calcbox.big{font-size:15px;border-style:solid;padding:14px}
+  .calcbox.big b{font-size:17px}
   .calcbox b{color:var(--ink);font-size:15px}
   .calcbox.big b{font-size:18px;color:var(--green-soft)}
 
@@ -330,6 +332,9 @@
 
     <h2 class="sec">Orçamentos salvos <span class="count" id="orcCount"></span></h2>
     <div id="listaOrc"></div>
+
+    <h2 class="sec">🖨️ Impressões próprias <span class="count" id="impCount"></span></h2>
+    <div id="listaImp"></div>
   </section>
 
   <!-- ===== PEÇAS PRONTAS ===== -->
