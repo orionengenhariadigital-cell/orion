@@ -1041,6 +1041,10 @@ function renderMaq(){
 /* ================= FILAMENTOS ================= */
 function precoPorGrama(f){ const q=+f.qtd_inicial; return q>0? (+f.preco_total)/q : 0; }
 function nomeFil(f){ return (f.cor||f.tipo) + (f.etiqueta?' · '+f.etiqueta:''); }
+// numeração sequencial (ORÇ-001 / VEN-001)
+function proxNumero(arr){ let max=0; arr.forEach(x=>{const n=+x.numero||0; if(n>max)max=n;}); return max+1; }
+function nfOrc(n){ return n?'ORÇ-'+String(n).padStart(3,'0'):''; }
+function nfVenda(n){ return n?'VEN-'+String(n).padStart(3,'0'):''; }
 // ordenação alfabética (pt-BR, ignora maiúsculas/acentos)
 function abc(arr,keyFn){ return arr.slice().sort((a,b)=>(keyFn(a)||'').localeCompare(keyFn(b)||'','pt-BR',{sensitivity:'base'})); }
 function filsOrd(){ return abc(db.filamentos,nomeFil); }
@@ -1227,7 +1231,7 @@ async function salvarOrcamento(){
   if(!cores.length){toast('Adicione ao menos 1 cor',true);return}
   let foto_url=null; if(pendingPhoto.o){ toast('Enviando foto...'); foto_url=await uploadPhoto(pendingPhoto.o); }
   const ins=await sb.from('orcamentos').insert({
-    nome,gramas:gTotal,perda_g:perda,tempo_horas:tempo,trab_min:trabMin,
+    nome,numero:proxNumero(db.orcamentos),gramas:gTotal,perda_g:perda,tempo_horas:tempo,trab_min:trabMin,
     cores:cores.map(c=>{const f=db.filamentos.find(x=>x.id===c.filId);return{filId:c.filId,tipo:f?f.tipo:'',cor:f?nomeFil(f):'',g:c.g}}),
     custo,valor,desconto,desconto_pct:descPct,foto_url,obs:(document.getElementById('o_obs').value||'').trim(),
     larg:numF(document.getElementById('o_larg').value),
@@ -1252,7 +1256,7 @@ async function orcStatus(id,status){
 }
 function msgOrcamento(o){
   let txt='*Orion Engenharia Impressão 3D*\n\n';
-  txt+='*Orçamento*\n';
+  txt+='*Orçamento'+(o.numero?' Nº '+nfOrc(o.numero):'')+'*\n';
   txt+='*Peça:* '+o.nome+'\n';
   if(o.cores&&o.cores.length){ txt+='*Cores:* '+o.cores.map(c=>c.cor||c.tipo).join(', ')+'\n'; }
   const med=[o.larg,o.alt,o.prof].map(x=>+x||0);
@@ -1278,14 +1282,18 @@ function enviarWhatsFixo(id){
   const num=fixo.length<=11?'55'+fixo:fixo; // adiciona 55 (Brasil) se faltar
   window.open('https://wa.me/'+num+'?text='+msgOrcamento(o),'_blank');
 }
-function enviarWhatsOutro(id){
+async function enviarWhatsOutro(id){
   const o=db.orcamentos.find(x=>x.id===id); if(!o)return;
-  let n=prompt('Número do cliente (com DDD, só números):\nEx: 19989543506');
+  let n=prompt('Número do cliente (com DDD, só números):\nEx: 19989543506', o.tel_cliente||'');
   if(n===null)return;
   n=(n||'').replace(/\D/g,'');
   if(n.length<10){ toast('Número inválido',true); return; }
+  // grava o número no orçamento
+  await sb.from('orcamentos').update({tel_cliente:n}).eq('id',id);
+  o.tel_cliente=n;
   const num=n.length<=11?'55'+n:n;
   window.open('https://wa.me/'+num+'?text='+msgOrcamento(o),'_blank');
+  carregarTudo();
 }
 
 async function registrarImpressaoPropria(){
@@ -1631,8 +1639,8 @@ function renderOrc(){
     const cls=lucroO>=0?'pos':'neg';
     const badge=o.status==='aprovado'?'<span class="badge" style="background:var(--green)">✓ aprovado</span>':(o.status==='recusado'?'<span class="badge" style="background:var(--red)">✕ recusado</span>':'');
     return `<div class="item">${o.foto_url?`<img class="thumb" src="${o.foto_url}">`:''}<div class="main">
-      <div class="t">${o.nome} ${badge} <span class="badge" style="background:var(--panel-2);color:var(--muted)">${diasTxt}</span></div>
-      <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · custo ${BRL(o.custo)}${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.obs?'<br>📝 '+o.obs:''}</div>
+      <div class="t">${o.numero?'<span class="badge" style="background:var(--brand)">'+nfOrc(o.numero)+'</span> ':''}${o.nome} ${badge} <span class="badge" style="background:var(--panel-2);color:var(--muted)">${diasTxt}</span></div>
+      <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · custo ${BRL(o.custo)}${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.tel_cliente?'<br>📱 '+o.tel_cliente:''}${o.obs?'<br>📝 '+o.obs:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button class="addcor" style="margin:0;flex:1;min-width:130px" onclick="orcVirarVenda('${o.id}')">➡️ Virar venda</button>
         <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:#25d366;color:#25d366" onclick="enviarWhatsFixo('${o.id}')">📱 Meu Whats</button>
@@ -1749,7 +1757,7 @@ async function registrarVenda(){
     baixas.push({filId:c.filId,g:gReal});
   }
   const ins=await sb.from('vendas').insert({
-    nome,gramas:gTotal,perda_g:perda,tempo_horas:tempo,
+    nome,numero:proxNumero(db.vendas),gramas:gTotal,perda_g:perda,tempo_horas:tempo,
     cores:cores.map(c=>{const f=db.filamentos.find(x=>x.id===c.filId);return{tipo:f?f.tipo:'',cor:f?f.cor:'',g:c.g}}),
     custo,venda,lucro:venda-custo,foto_url,
     obs:(document.getElementById('v_obs').value||'').trim(),
@@ -1785,7 +1793,7 @@ function renderVendas(){
     const thumb=v.foto_url?`<img class="thumb" src="${v.foto_url}">`:'';
     const ncores=(v.cores&&v.cores.length)||0;
     return `<div class="item">${thumb}<div class="main">
-      <div class="t">${v.nome}${ncores>1?` <span class="badge" style="background:var(--brand-soft)">${ncores} cores</span>`:''}</div>
+      <div class="t">${v.numero?'<span class="badge" style="background:var(--brand)">'+nfVenda(v.numero)+'</span> ':''}${v.nome}${ncores>1?` <span class="badge" style="background:var(--brand-soft)">${ncores} cores</span>`:''}</div>
       <div class="s">${d} · ${(+v.gramas).toLocaleString('pt-BR')} g · ${v.tempo_horas||0}h · custo ${BRL(v.custo)}${v.obs?'<br>📝 '+v.obs:''}</div></div>
       <div class="right"><div class="big ${cls}">${BRL(v.lucro)}</div><div class="lbl">venda ${BRL(v.venda)}</div></div>
       <button class="ed" onclick="editar('vendas','${v.id}')">✏️</button><button class="x" onclick="delVenda('${v.id}')">×</button></div>`;
