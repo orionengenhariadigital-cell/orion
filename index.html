@@ -711,8 +711,9 @@ async function guard(fn){ if(_saving){return} _saving=true; try{ await fn(); } f
 
 /* ================= EDIÇÃO GENÉRICA ================= */
 let _editCtx=null;
+let pendingEditPhoto=null;
 const EDIT_DEFS={
-  filamentos:{titulo:'Editar filamento',sub:'Para estoque e preço use o Inventário',campos:[
+  filamentos:{titulo:'Editar filamento',sub:'Para estoque e preço use o Inventário',foto:true,campos:[
     {k:'tipo',lbl:'Tipo',tipo:'select',ops:['PLA','PETG','ABS','ASA','TPU','Nylon','PC','PLA-CF','PETG-CF','HIPS','PVA','Outros']},
     {k:'cor',lbl:'Cor / marca',tipo:'text'},
     {k:'cor_hex',lbl:'Cor real',tipo:'color'},
@@ -729,7 +730,7 @@ const EDIT_DEFS={
     {k:'valor_compra',lbl:'Valor pago (R$)',tipo:'num'},
     {k:'vida_util_horas',lbl:'Vida útil (horas)',tipo:'num'}
   ]},
-  pecas:{titulo:'Editar peça',campos:[
+  pecas:{titulo:'Editar peça',foto:true,campos:[
     {k:'nome',lbl:'Nome',tipo:'text'},
     {k:'cores',lbl:'Cores',tipo:'text'},
     {k:'medida',lbl:'Medida',tipo:'text'},
@@ -738,12 +739,12 @@ const EDIT_DEFS={
     {k:'qtd',lbl:'Quantidade',tipo:'num'},
     {k:'obs',lbl:'Observação',tipo:'text'}
   ]},
-  vendas:{titulo:'Editar venda',sub:'Gramas/cores não editáveis (use Reverter no Histórico)',campos:[
+  vendas:{titulo:'Editar venda',sub:'Gramas/cores não editáveis (use Reverter no Histórico)',foto:true,campos:[
     {k:'nome',lbl:'Nome',tipo:'text'},
     {k:'venda',lbl:'Valor de venda (R$)',tipo:'num'},
     {k:'obs',lbl:'Observação',tipo:'text'}
   ]},
-  orcamentos:{titulo:'Editar orçamento',campos:[
+  orcamentos:{titulo:'Editar orçamento',foto:true,campos:[
     {k:'nome',lbl:'Cliente / peça',tipo:'text'},
     {k:'valor',lbl:'Valor orçado (R$)',tipo:'num'},
     {k:'desconto_pct',lbl:'Desconto (%)',tipo:'num'},
@@ -776,11 +777,11 @@ const EDIT_DEFS={
 function editar(tabela,id){
   const def=EDIT_DEFS[tabela]; if(!def)return;
   const rec=(db[tabela]||[]).find(x=>x.id===id); if(!rec){toast('Item não encontrado',true);return}
-  _editCtx={tabela,id};
+  _editCtx={tabela,id}; pendingEditPhoto=null;
   document.getElementById('editTitulo').textContent=def.titulo;
   document.getElementById('editSub').textContent=def.sub||'';
   const box=document.getElementById('editCampos');
-  box.innerHTML=def.campos.map(c=>{
+  let html=def.campos.map(c=>{
     let val=rec[c.k]; if(val==null)val='';
     if(c.tipo==='num'){ const n=+val; val=(val===''||isNaN(n))?'':String(n).replace('.',','); return `<label>${c.lbl}</label><input data-k="${c.k}" data-t="num" type="text" inputmode="decimal" value="${val}">`; }
     if(c.tipo==='color'){ return `<label>${c.lbl}</label><input data-k="${c.k}" data-t="color" type="color" value="${val||'#1f8fff'}" style="width:54px;height:42px;padding:2px;border-radius:10px;cursor:pointer;display:block">`; }
@@ -788,9 +789,38 @@ function editar(tabela,id){
     if(c.tipo==='select'){ return `<label>${c.lbl}</label><select data-k="${c.k}" data-t="text">${c.ops.map(o=>`<option ${o===val?'selected':''}>${o}</option>`).join('')}</select>`; }
     return `<label>${c.lbl}</label><input data-k="${c.k}" data-t="text" type="text" value="${(''+val).replace(/"/g,'&quot;')}">`;
   }).join('');
+  // bloco de foto (se a tabela tiver foto)
+  if(def.foto){
+    const atual=rec.foto_url||'';
+    html+=`<label>Foto</label>
+      <div class="photo">
+        <img class="prev" id="edit_prev" src="${atual||"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' fill='%230a1322'/><text x='32' y='38' font-size='24' text-anchor='middle' fill='%238095b4'>📷</text></svg>"}">
+        <div class="btns">
+          <button type="button" onclick="document.getElementById('edit_cam').click()">📷 Tirar foto</button>
+          <button type="button" onclick="document.getElementById('edit_gal').click()">🖼️ Galeria</button>
+        </div>
+        <input id="edit_cam" type="file" accept="image/*" capture="environment" style="display:none" onchange="pickEditPhoto(event)">
+        <input id="edit_gal" type="file" accept="image/*" style="display:none" onchange="pickEditPhoto(event)">
+      </div>`;
+  }
+  box.innerHTML=html;
   document.getElementById('editModal').style.display='flex';
 }
-function fecharEdit(){ document.getElementById('editModal').style.display='none'; _editCtx=null; }
+function pickEditPhoto(ev){
+  const file=ev.target.files[0]; if(!file)return;
+  const img=new Image(); const rd=new FileReader();
+  rd.onload=()=>{ img.onload=()=>{
+    const max=1280; let{width:w,height:h}=img;
+    if(w>h&&w>max){h=h*max/w;w=max} else if(h>max){w=w*max/h;h=max}
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    const dataUrl=cv.toDataURL('image/jpeg',0.8);
+    pendingEditPhoto=dataUrl;
+    document.getElementById('edit_prev').src=dataUrl;
+  }; img.src=rd.result; };
+  rd.readAsDataURL(file); ev.target.value='';
+}
+function fecharEdit(){ document.getElementById('editModal').style.display='none'; _editCtx=null; pendingEditPhoto=null; }
 async function salvarEdit(){
   if(!_editCtx)return;
   const upd={};
@@ -798,6 +828,7 @@ async function salvarEdit(){
     const k=el.dataset.k, t=el.dataset.t;
     upd[k]= t==='num'? numF(el.value) : el.value;
   });
+  if(pendingEditPhoto){ toast('Enviando foto...'); const url=await uploadPhoto(pendingEditPhoto); if(url)upd.foto_url=url; }
   const {error}=await sb.from(_editCtx.tabela).update(upd).eq('id',_editCtx.id);
   if(error){toast('Erro: '+error.message,true);return}
   fecharEdit(); await carregarTudo(); toast('Alterado ✓');
