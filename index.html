@@ -76,6 +76,7 @@
   .calcbox{background:var(--calc-bg,#0a1322);border:1px dashed var(--calc-brd,var(--line));border-radius:12px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--calc-txt,var(--muted));display:flex;justify-content:space-between;align-items:center}
   .calcbox.big{font-size:15px;border-style:solid;padding:14px}
   .calcbox.big b{font-size:17px}
+  .calcbox b.custo{color:var(--red)}
   .calcbox b{color:var(--ink);font-size:15px}
   .calcbox.big b{font-size:18px;color:var(--green-soft)}
 
@@ -152,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.3</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.4</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -225,9 +226,9 @@
         <div><label>Máquina usada</label><select id="v_maq"></select></div>
       </div>
 
-      <div class="calcbox"><span>Custo filamento <span id="v_gtot">(0 g)</span></span><b id="v_cfil">R$ 0,00</b></div>
-      <div class="calcbox"><span>+ Energia · desgaste · mão de obra</span><b id="v_cextra">R$ 0,00</b></div>
-      <div class="calcbox big"><span>Custo total da peça</span><b id="v_custo">R$ 0,00</b></div>
+      <div class="calcbox"><span>Custo filamento <span id="v_gtot">(0 g)</span></span><b id="v_cfil" class="custo">R$ 0,00</b></div>
+      <div class="calcbox"><span>+ Energia · desgaste · mão de obra</span><b id="v_cextra" class="custo">R$ 0,00</b></div>
+      <div class="calcbox big"><span>Custo total da peça</span><b id="v_custo" class="custo">R$ 0,00</b></div>
 
       <label>Preço sugerido (custo × margem) <span id="v_margemtag" style="color:var(--brand-soft)"></span></label>
       <input id="v_sugerido" type="text" readonly style="color:var(--brand-soft);font-weight:700">
@@ -294,9 +295,9 @@
         <div><label>Máquina usada</label><select id="o_maq"></select></div>
       </div>
 
-      <div class="calcbox"><span>Custo filamento <b id="o_gtot" style="color:var(--muted);font-weight:600"></b></span><b id="o_cfil">R$ 0,00</b></div>
-      <div class="calcbox"><span>+ Energia · desgaste · mão de obra</span><b id="o_cextra">R$ 0,00</b></div>
-      <div class="calcbox"><span>Custo total da peça</span><b id="o_custo" class="pos">R$ 0,00</b></div>
+      <div class="calcbox"><span>Custo filamento <b id="o_gtot" style="color:var(--muted);font-weight:600"></b></span><b id="o_cfil" class="custo">R$ 0,00</b></div>
+      <div class="calcbox"><span>+ Energia · desgaste · mão de obra</span><b id="o_cextra" class="custo">R$ 0,00</b></div>
+      <div class="calcbox"><span>Custo total da peça</span><b id="o_custo" class="custo">R$ 0,00</b></div>
 
       <label>Preço sugerido (custo × margem) <span id="o_margemtag" style="color:var(--brand-soft)"></span></label>
       <input id="o_sugerido" type="text" readonly style="color:var(--brand-soft);font-weight:800">
@@ -371,9 +372,9 @@
         <div><label>Máquina usada</label><select id="p_maq"></select></div>
       </div>
 
-      <div class="calcbox"><span>Custo filamento <b id="p_gtot" style="color:var(--muted);font-weight:600"></b></span><b id="p_cfil">R$ 0,00</b></div>
-      <div class="calcbox"><span>+ Energia · desgaste · mão de obra · acessórios</span><b id="p_cextra">R$ 0,00</b></div>
-      <div class="calcbox"><span>Custo total da peça</span><b id="p_custo" class="pos">R$ 0,00</b></div>
+      <div class="calcbox"><span>Custo filamento <b id="p_gtot" style="color:var(--muted);font-weight:600"></b></span><b id="p_cfil" class="custo">R$ 0,00</b></div>
+      <div class="calcbox"><span>+ Energia · desgaste · mão de obra · acessórios</span><b id="p_cextra" class="custo">R$ 0,00</b></div>
+      <div class="calcbox"><span>Custo total da peça</span><b id="p_custo" class="custo">R$ 0,00</b></div>
 
       <label>Preço sugerido (custo × margem) <span id="p_margemtag" style="color:var(--brand-soft)"></span></label>
       <input id="p_sugerido" type="text" readonly style="color:var(--brand-soft);font-weight:800">
