@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.9</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.0</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -1290,13 +1290,15 @@ const PROD_ETAPAS=[
 ];
 function prodBlock(o){
   const atual=o.status_prod||'';
+  const datas=o.status_prod_datas||{};
   const atualLbl=PROD_ETAPAS.find(e=>e.k===atual);
   let html='<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">';
   html+='<div style="font-size:12px;color:var(--muted);margin-bottom:7px">📍 Status de produção'+(atualLbl?': <b style="color:'+atualLbl.cor+'">'+atualLbl.emoji+' '+atualLbl.lbl+'</b>':'')+'</div>';
   html+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
   PROD_ETAPAS.forEach(e=>{
     const on=atual===e.k;
-    html+=`<button class="addcor" style="margin:0;flex:1;min-width:95px;${on?'background:'+e.cor+';color:#0a1322;border-color:'+e.cor:'border-color:'+e.cor+';color:'+e.cor}" onclick="prodStatus('${o.id}','${e.k}')">${e.emoji} ${e.lbl}</button>`;
+    const dt=datas[e.k]?fmtDataHora(datas[e.k]):'';
+    html+=`<button class="addcor" style="margin:0;flex:1;min-width:95px;line-height:1.2;${on?'background:'+e.cor+';color:#0a1322;border-color:'+e.cor:'border-color:'+e.cor+';color:'+e.cor}" onclick="prodStatus('${o.id}','${e.k}')">${e.emoji} ${e.lbl}${dt?'<br><span style="font-size:10px;opacity:.8">'+dt+'</span>':''}</button>`;
   });
   html+='</div>';
   if(atual && o.tel_cliente){
@@ -1304,11 +1306,29 @@ function prodBlock(o){
   } else if(atual && !o.tel_cliente){
     html+='<div style="font-size:11px;color:var(--muted);margin-top:7px">💡 Use "Outro número" para gravar o WhatsApp do cliente e poder avisá-lo.</div>';
   }
+  if(atual){
+    html+=`<button class="addcor" style="margin:8px 0 0;width:100%;border-color:var(--muted);color:var(--muted)" onclick="prodStatus('${o.id}','')">✕ Cancelar status de produção</button>`;
+  }
   html+='</div>';
   return html;
 }
+function fmtDataHora(iso){
+  const d=new Date(iso); if(isNaN(d))return '';
+  const dia=String(d.getDate()).padStart(2,'0');
+  const mes=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][d.getMonth()];
+  const h=String(d.getHours()).padStart(2,'0');
+  const mi=String(d.getMinutes()).padStart(2,'0');
+  return dia+'/'+mes+' '+h+':'+mi;
+}
 async function prodStatus(id,etapa){
-  await sb.from('orcamentos').update({status_prod:etapa}).eq('id',id);
+  const o=db.orcamentos.find(x=>x.id===id);
+  if(!etapa){
+    await sb.from('orcamentos').update({status_prod:'',status_prod_datas:{}}).eq('id',id);
+    await carregarTudo(); toast('Status de produção cancelado'); return;
+  }
+  const datas=Object.assign({}, (o&&o.status_prod_datas)||{});
+  if(!datas[etapa]) datas[etapa]=new Date().toISOString();
+  await sb.from('orcamentos').update({status_prod:etapa,status_prod_datas:datas}).eq('id',id);
   await carregarTudo();
   const e=PROD_ETAPAS.find(x=>x.k===etapa);
   toast('Status: '+(e?e.lbl:etapa));
