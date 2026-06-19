@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.4</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.5</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -169,7 +169,7 @@
     <button class="out" onclick="sair()">Sair</button>
   </header>
 
-  <div id="avisoEstoque" style="display:none;background:rgba(255,181,71,.12);border:1px solid var(--amber);border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:var(--amber);cursor:pointer" onclick="go('fil')"></div>
+  <div id="avisoEstoque" style="display:none;background:rgba(255,181,71,.12);border:1px solid var(--amber);border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:var(--amber);cursor:pointer" onclick="verAcabando()"></div>
 
   <div class="summary">
     <div class="stat lucro"><div class="k">Lucro total</div><div class="v" id="sumLucro">R$ 0,00</div><div class="sub" id="sumVendas">0 vendas</div></div>
@@ -1094,23 +1094,29 @@ async function salvarFilamento(){
 async function delFil(id){ if(!confirm('Remover filamento?'))return; await sb.from('filamentos').delete().eq('id',id); await carregarTudo(); }
 let _filFiltro='todos';
 function setFilFiltro(t){ _filFiltro=t; renderFil(); }
+function verAcabando(){ _filFiltro='acabando'; go('fil'); renderFil(); window.scrollTo(0,0); }
 function renderFil(){
   const box=document.getElementById('listaFil');
   document.getElementById('filCount').textContent=db.filamentos.length?db.filamentos.length+' itens':'';
   // monta os chips com os tipos que existem no estoque
   const tipos=[...new Set(db.filamentos.map(f=>f.tipo))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const fc=document.getElementById('filFiltro');
+  const qtdBaixos=db.filamentos.filter(f=>(+f.restante)<150).length;
   if(fc){
-    if(tipos.length>1){
+    if(tipos.length>1 || qtdBaixos>0){
       fc.style.display='flex';
       fc.innerHTML=`<button class="chip ${_filFiltro==='todos'?'on':''}" onclick="setFilFiltro('todos')">Todos</button>`+
+        (qtdBaixos>0?`<button class="chip ${_filFiltro==='acabando'?'on':''}" style="border-color:var(--amber);color:${_filFiltro==='acabando'?'#1a1206':'var(--amber)'};${_filFiltro==='acabando'?'background:var(--amber)':''}" onclick="setFilFiltro('acabando')">⚠️ Acabando (${qtdBaixos})</button>`:'')+
         tipos.map(t=>`<button class="chip ${_filFiltro===t?'on':''}" onclick="setFilFiltro('${t}')">${t}</button>`).join('');
     } else { fc.style.display='none'; }
   }
   if(!db.filamentos.length){box.innerHTML='<div class="empty"><span class="em">🧵</span>Nenhum filamento ainda.</div>';return}
-  const lista=(_filFiltro==='todos'?db.filamentos:db.filamentos.filter(f=>f.tipo===_filFiltro))
-    .slice().sort((a,b)=>nomeFil(a).localeCompare(nomeFil(b),'pt-BR',{sensitivity:'base'}));
-  if(!lista.length){box.innerHTML='<div class="empty" style="padding:14px">Nenhum '+_filFiltro+' no estoque.</div>';return}
+  let lista;
+  if(_filFiltro==='acabando') lista=db.filamentos.filter(f=>(+f.restante)<150);
+  else if(_filFiltro==='todos') lista=db.filamentos.slice();
+  else lista=db.filamentos.filter(f=>f.tipo===_filFiltro);
+  lista=lista.slice().sort((a,b)=>nomeFil(a).localeCompare(nomeFil(b),'pt-BR',{sensitivity:'base'}));
+  if(!lista.length){box.innerHTML='<div class="empty" style="padding:14px">Nenhum filamento aqui.</div>';return}
   box.innerHTML=lista.map(f=>{
     const pct=f.qtd_inicial>0?Math.max(0,Math.min(100,f.restante/f.qtd_inicial*100)):0;
     const corMat=MAT_COLORS[f.tipo]||'var(--outros)';
