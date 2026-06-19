@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.5</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.6</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -640,6 +640,22 @@
   </div>
 
   <!-- ===== EDIÇÃO (modal genérico) ===== -->
+  <!-- ===== AGENDA DE CLIENTES (modal) ===== -->
+  <div id="cliModal" style="display:none;position:fixed;inset:0;z-index:62;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)fecharCli()">
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:20px;max-width:420px;width:100%;padding:22px;margin:auto">
+      <div style="font-weight:800;font-size:17px;margin-bottom:14px">📱 Enviar orçamento</div>
+      <label>Nome do cliente (opcional)</label>
+      <input id="cli_nome" type="text" placeholder="Ex: Lucas" autocomplete="off">
+      <label>WhatsApp (com DDD, só números)</label>
+      <input id="cli_tel" type="text" inputmode="numeric" placeholder="Ex: 19989543506" autocomplete="off">
+      <div style="display:flex;gap:8px;margin:14px 0 6px">
+        <button class="act" style="flex:1" onclick="guard(confirmarCli)">📱 Enviar no WhatsApp</button>
+        <button class="act ghost" style="flex:0 0 auto" onclick="fecharCli()">Cancelar</button>
+      </div>
+      <div id="cli_lista" style="margin-top:8px"></div>
+    </div>
+  </div>
+
   <div id="editModal" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)fecharEdit()">
     <div style="background:var(--panel);border:1px solid var(--line);border-radius:20px;max-width:420px;width:100%;padding:22px;margin:auto">
       <div style="font-weight:800;font-size:17px;margin-bottom:4px" id="editTitulo">Editar</div>
@@ -724,7 +740,7 @@ const SUPABASE_URL = "https://zbfmzoaxshtgsowrvmml.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Ox740iQNVKd3Xb4TQ8t_Qg_pTwk-nE4";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let db = { filamentos:[], vendas:[], maquinas:[], produtos:[], historico:[], manutencoes:[], orcamentos:[], impressoes:[], pecas:[], links:[], acessorios:[], perdas:[], config:null };
+let db = { filamentos:[], vendas:[], maquinas:[], produtos:[], historico:[], manutencoes:[], orcamentos:[], impressoes:[], pecas:[], links:[], acessorios:[], perdas:[], clientes:[], config:null };
 let user = null;
 
 const BRL = n => "R$ " + (Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -910,7 +926,7 @@ async function iniciarApp(){
 
 /* ================= CARREGAR DADOS ================= */
 async function carregarTudo(){
-  const [f,v,m,c,p,h,mt,orc,imp,pc,lk,ac,pd]=await Promise.all([
+  const [f,v,m,c,p,h,mt,orc,imp,pc,lk,ac,pd,cli]=await Promise.all([
     sb.from('filamentos').select('*').order('criado_em',{ascending:false}),
     sb.from('vendas').select('*').order('criado_em',{ascending:false}),
     sb.from('maquinas').select('*').order('criado_em',{ascending:false}),
@@ -923,12 +939,13 @@ async function carregarTudo(){
     sb.from('pecas').select('*').order('criado_em',{ascending:false}),
     sb.from('links').select('*').order('ordem',{ascending:true}),
     sb.from('acessorios').select('*').order('criado_em',{ascending:false}),
-    sb.from('perdas').select('*').order('data',{ascending:false})
+    sb.from('perdas').select('*').order('data',{ascending:false}),
+    sb.from('clientes').select('*').order('nome',{ascending:true})
   ]);
   db.filamentos=f.data||[]; db.vendas=v.data||[]; db.maquinas=m.data||[];
   db.config=(c.data&&c.data[0])||null; db.produtos=p.data||[]; db.historico=h.data||[];
   db.manutencoes=mt.data||[]; db.orcamentos=orc.data||[]; db.impressoes=imp.data||[]; db.pecas=pc.data||[];
-  db.links=lk.data||[]; db.acessorios=ac.data||[]; db.perdas=pd.data||[];
+  db.links=lk.data||[]; db.acessorios=ac.data||[]; db.perdas=pd.data||[]; db.clientes=cli.data||[];
   renderTudo();
 }
 async function logAcao(acao,tipo,snapshot){
@@ -1294,17 +1311,55 @@ function enviarWhatsFixo(id){
   const num=fixo.length<=11?'55'+fixo:fixo; // adiciona 55 (Brasil) se faltar
   window.open('https://wa.me/'+num+'?text='+msgOrcamento(o),'_blank');
 }
-async function enviarWhatsOutro(id){
+let _cliOrcId=null;
+function enviarWhatsOutro(id){
   const o=db.orcamentos.find(x=>x.id===id); if(!o)return;
-  let n=prompt('Número do cliente (com DDD, só números):\nEx: 19989543506', o.tel_cliente||'');
-  if(n===null)return;
-  n=(n||'').replace(/\D/g,'');
+  _cliOrcId=id;
+  document.getElementById('cli_nome').value='';
+  document.getElementById('cli_tel').value=o.tel_cliente||'';
+  renderCliLista();
+  document.getElementById('cliModal').style.display='flex';
+}
+function fecharCli(){ document.getElementById('cliModal').style.display='none'; _cliOrcId=null; }
+function renderCliLista(){
+  const box=document.getElementById('cli_lista'); if(!box)return;
+  const cls=(db.clientes||[]).slice().sort((a,b)=>(a.nome||a.telefone).localeCompare(b.nome||b.telefone,'pt-BR'));
+  if(!cls.length){ box.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:8px">Seus clientes vão aparecer aqui conforme você usa.</div>'; return; }
+  box.innerHTML='<div style="color:var(--muted);font-size:12px;margin:10px 0 6px">Ou escolha um cliente salvo:</div>'+
+    cls.map(c=>`<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px">
+      <div style="flex:1;cursor:pointer" onclick="escolherCli('${c.id}')">
+        <div style="font-weight:600">${c.nome||'(sem nome)'}</div>
+        <div style="color:var(--muted);font-size:12px">📱 ${c.telefone}</div>
+      </div>
+      <button class="x" onclick="delCliente('${c.id}')" style="flex:0 0 auto">×</button>
+    </div>`).join('');
+}
+function escolherCli(cid){
+  const c=db.clientes.find(x=>x.id===cid); if(!c)return;
+  document.getElementById('cli_nome').value=c.nome||'';
+  document.getElementById('cli_tel').value=c.telefone||'';
+}
+async function delCliente(cid){
+  const c=db.clientes.find(x=>x.id===cid);
+  if(!confirm('Remover '+(c&&c.nome?c.nome:'este cliente')+' da agenda?'))return;
+  await sb.from('clientes').delete().eq('id',cid);
+  await carregarTudo(); renderCliLista();
+}
+async function confirmarCli(){
+  const o=db.orcamentos.find(x=>x.id===_cliOrcId); if(!o){fecharCli();return}
+  const nome=(document.getElementById('cli_nome').value||'').trim();
+  let n=(document.getElementById('cli_tel').value||'').replace(/\D/g,'');
   if(n.length<10){ toast('Número inválido',true); return; }
-  // grava o número no orçamento
-  await sb.from('orcamentos').update({tel_cliente:n}).eq('id',id);
+  // grava telefone no orçamento
+  await sb.from('orcamentos').update({tel_cliente:n}).eq('id',o.id);
   o.tel_cliente=n;
+  // salva/atualiza na agenda de clientes (se ainda não existe esse número)
+  const jaExiste=db.clientes.find(c=>c.telefone===n);
+  if(!jaExiste){ await sb.from('clientes').insert({nome,telefone:n}); }
+  else if(nome && !jaExiste.nome){ await sb.from('clientes').update({nome}).eq('id',jaExiste.id); }
   const num=n.length<=11?'55'+n:n;
   window.open('https://wa.me/'+num+'?text='+msgOrcamento(o),'_blank');
+  fecharCli();
   carregarTudo();
 }
 
