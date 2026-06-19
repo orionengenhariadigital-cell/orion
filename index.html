@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.0</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.1</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -329,7 +329,8 @@
       <input id="o_obs" type="text" placeholder="Ex: prazo 5 dias, frete à parte..." autocomplete="off">
 
       <div class="calcbox big"><span>Lucro previsto <b id="o_lucropct" style="font-weight:700"></b></span><b id="o_lucro">R$ 0,00</b></div>
-      <button class="act" onclick="guard(salvarOrcamento)">💾 Salvar orçamento</button>
+      <div id="o_editaviso" style="display:none;background:rgba(31,143,255,.12);border:1px solid var(--brand-soft);border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:12.5px;color:var(--brand-soft)">✏️ Editando um orçamento existente. <span onclick="cancelarEdicaoOrc()" style="text-decoration:underline;cursor:pointer">Cancelar edição</span></div>
+      <button class="act" id="btnSalvarOrc" onclick="guard(salvarOrcamento)">💾 Salvar orçamento</button>
       <button class="act ghost" onclick="guard(registrarImpressaoPropria)">🖨️ Registrar impressão própria (baixa estoque, sem faturar)</button>
       <small class="note">"Impressão própria" é pra peças suas / protótipos: gasta o filamento do estoque mas NÃO entra no faturamento nem no lucro.</small>
     </div>
@@ -1248,29 +1249,75 @@ function calcOrc(){
   if(lp){ lp.textContent=valorFinal>0?'('+pct+'%)':''; lp.className=lucro>=0?'pos':'neg'; }
   return {gTotal,custo,cores,perda,tempo,trabMin,valor:valorFinal,desconto,descPct};
 }
+let _editandoOrcId=null;
+function orcEditarCompleto(id){
+  const o=db.orcamentos.find(x=>x.id===id); if(!o)return;
+  _editandoOrcId=id;
+  go('orc');
+  window.scrollTo(0,0);
+  document.getElementById('o_nome').value=o.nome||'';
+  const th=Math.floor(o.tempo_horas||0), tm=Math.round(((o.tempo_horas||0)-th)*60);
+  document.getElementById('o_th').value=th||''; document.getElementById('o_tm').value=tm||'';
+  document.getElementById('o_trab').value=o.trab_min||'';
+  document.getElementById('o_perda').value=o.perda_g||'';
+  document.getElementById('o_valor').value=((+o.valor||0)+( +o.desconto||0)).toFixed(2).replace('.',',');
+  document.getElementById('o_desc').value=o.desconto_pct||'';
+  document.getElementById('o_obs').value=o.obs||'';
+  document.getElementById('o_larg').value=o.larg||''; document.getElementById('o_alt').value=o.alt||''; document.getElementById('o_prof').value=o.prof||'';
+  if(document.getElementById('o_prazo')) document.getElementById('o_prazo').value=o.prazo||'';
+  if(document.getElementById('o_entrega')) document.getElementById('o_entrega').value=o.entrega||'';
+  if(document.getElementById('o_tipo')) document.getElementById('o_tipo').value=o.tipo_venda||'direta';
+  document.getElementById('o_cores').innerHTML='';
+  (o.cores||[]).forEach(c=>addCorRowO(c.filId||'',c.g));
+  if(o.maquina_id) document.getElementById('o_maq').value=o.maquina_id;
+  const btn=document.getElementById('btnSalvarOrc'); if(btn) btn.textContent='✅ Atualizar orçamento';
+  const av=document.getElementById('o_editaviso'); if(av) av.style.display='block';
+  calcOrc();
+  toast('Orçamento carregado — ajuste e atualize');
+}
+function cancelarEdicaoOrc(){
+  _editandoOrcId=null;
+  ['o_nome','o_th','o_tm','o_trab','o_perda','o_valor','o_obs','o_larg','o_alt','o_prof','o_prazo','o_desc'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
+  document.getElementById('o_cores').innerHTML='';
+  pendingPhoto.o=null; const op=document.getElementById('o_prev'); if(op)op.src='';
+  const btn=document.getElementById('btnSalvarOrc'); if(btn) btn.textContent='💾 Salvar orçamento';
+  const av=document.getElementById('o_editaviso'); if(av) av.style.display='none';
+  calcOrc(); toast('Edição cancelada');
+}
 async function salvarOrcamento(){
   const nome=(document.getElementById('o_nome').value||'').trim();
   const {gTotal,custo,cores,perda,tempo,trabMin,valor,desconto,descPct}=calcOrc();
   if(!nome){toast('Dê um nome ao orçamento',true);return}
   if(!cores.length){toast('Adicione ao menos 1 cor',true);return}
   let foto_url=null; if(pendingPhoto.o){ toast('Enviando foto...'); foto_url=await uploadPhoto(pendingPhoto.o); }
-  const ins=await sb.from('orcamentos').insert({
-    nome,numero:proxNumero(db.orcamentos),gramas:gTotal,perda_g:perda,tempo_horas:tempo,trab_min:trabMin,
+  const dados={
+    nome,gramas:gTotal,perda_g:perda,tempo_horas:tempo,trab_min:trabMin,
     cores:cores.map(c=>{const f=db.filamentos.find(x=>x.id===c.filId);return{filId:c.filId,tipo:f?f.tipo:'',cor:f?nomeFil(f):'',g:c.g}}),
-    custo,valor,desconto,desconto_pct:descPct,foto_url,obs:(document.getElementById('o_obs').value||'').trim(),
+    custo,valor,desconto,desconto_pct:descPct,obs:(document.getElementById('o_obs').value||'').trim(),
     larg:numF(document.getElementById('o_larg').value),
     alt:numF(document.getElementById('o_alt').value),
     prof:numF(document.getElementById('o_prof').value),
     entrega:document.getElementById('o_entrega')?document.getElementById('o_entrega').value:'',
     prazo:(document.getElementById('o_prazo')?document.getElementById('o_prazo').value:'').trim(),
     tipo_venda:document.getElementById('o_tipo')?document.getElementById('o_tipo').value:'direta',
-    maquina_id:document.getElementById('o_maq').value||null, status:'aberto'
-  }).select();
-  if(ins.error){toast('Erro: '+ins.error.message,true);return}
+    maquina_id:document.getElementById('o_maq').value||null
+  };
+  if(foto_url) dados.foto_url=foto_url;
+  let err;
+  if(_editandoOrcId){
+    const r=await sb.from('orcamentos').update(dados).eq('id',_editandoOrcId); err=r.error;
+  } else {
+    dados.numero=proxNumero(db.orcamentos); dados.foto_url=foto_url; dados.status='aberto';
+    const r=await sb.from('orcamentos').insert(dados).select(); err=r.error;
+  }
+  if(err){toast('Erro: '+err.message,true);return}
+  const eraEdicao=!!_editandoOrcId; _editandoOrcId=null;
   ['o_nome','o_th','o_tm','o_trab','o_perda','o_valor','o_obs','o_larg','o_alt','o_prof','o_prazo','o_desc'].forEach(i=>document.getElementById(i).value='');
   pendingPhoto.o=null; const op=document.getElementById('o_prev'); if(op)op.src='';
   document.getElementById('o_cores').innerHTML='';
-  await carregarTudo(); calcOrc(); toast('Orçamento salvo ✓');
+  const btn=document.getElementById('btnSalvarOrc'); if(btn) btn.textContent='💾 Salvar orçamento';
+  const av=document.getElementById('o_editaviso'); if(av) av.style.display='none';
+  await carregarTudo(); calcOrc(); toast(eraEdicao?'Orçamento atualizado ✓':'Orçamento salvo ✓');
 }
 async function delOrc(id){
   const o=db.orcamentos.find(x=>x.id===id);
@@ -1772,6 +1819,7 @@ function renderOrc(){
       <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · <span style="color:var(--red)">custo ${BRL(o.custo)}</span>${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.tel_cliente?'<br>📱 '+o.tel_cliente:''}${o.obs?'<br>📝 '+o.obs:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button class="addcor" style="margin:0;flex:1;min-width:130px" onclick="orcVirarVenda('${o.id}')">➡️ Virar venda</button>
+        <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:var(--brand-soft);color:var(--brand-soft)" onclick="orcEditarCompleto('${o.id}')">✏️ Editar completo</button>
         <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:#25d366;color:#25d366" onclick="enviarWhatsFixo('${o.id}')">📱 Meu Whats</button>
         <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:#25d366;color:#25d366" onclick="enviarWhatsOutro('${o.id}')">📱 Outro número</button>
         ${o.status!=='aprovado'?`<button class="addcor" style="margin:0;flex:1;min-width:100px;border-color:var(--green);color:var(--green)" onclick="orcStatus('${o.id}','aprovado')">✓ Aprovado</button>`:''}
