@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.8</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.9</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -1283,6 +1283,48 @@ async function orcStatus(id,status){
   await carregarTudo();
   toast(status==='aprovado'?'Orçamento aprovado ✓':status==='recusado'?'Orçamento recusado':'Orçamento reaberto');
 }
+const PROD_ETAPAS=[
+  {k:'producao', lbl:'Em produção', emoji:'🛠️', cor:'var(--amber)'},
+  {k:'pronto',   lbl:'Pronto',      emoji:'✅', cor:'var(--brand-soft)'},
+  {k:'entregue', lbl:'Entregue',    emoji:'📦', cor:'var(--green)'}
+];
+function prodBlock(o){
+  const atual=o.status_prod||'';
+  const atualLbl=PROD_ETAPAS.find(e=>e.k===atual);
+  let html='<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">';
+  html+='<div style="font-size:12px;color:var(--muted);margin-bottom:7px">📍 Status de produção'+(atualLbl?': <b style="color:'+atualLbl.cor+'">'+atualLbl.emoji+' '+atualLbl.lbl+'</b>':'')+'</div>';
+  html+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  PROD_ETAPAS.forEach(e=>{
+    const on=atual===e.k;
+    html+=`<button class="addcor" style="margin:0;flex:1;min-width:95px;${on?'background:'+e.cor+';color:#0a1322;border-color:'+e.cor:'border-color:'+e.cor+';color:'+e.cor}" onclick="prodStatus('${o.id}','${e.k}')">${e.emoji} ${e.lbl}</button>`;
+  });
+  html+='</div>';
+  if(atual && o.tel_cliente){
+    html+=`<button class="addcor" style="margin:8px 0 0;width:100%;border-color:#25d366;color:#25d366" onclick="avisarProducao('${o.id}')">📲 Avisar cliente no WhatsApp</button>`;
+  } else if(atual && !o.tel_cliente){
+    html+='<div style="font-size:11px;color:var(--muted);margin-top:7px">💡 Use "Outro número" para gravar o WhatsApp do cliente e poder avisá-lo.</div>';
+  }
+  html+='</div>';
+  return html;
+}
+async function prodStatus(id,etapa){
+  await sb.from('orcamentos').update({status_prod:etapa}).eq('id',id);
+  await carregarTudo();
+  const e=PROD_ETAPAS.find(x=>x.k===etapa);
+  toast('Status: '+(e?e.lbl:etapa));
+}
+function avisarProducao(id){
+  const o=db.orcamentos.find(x=>x.id===id); if(!o||!o.tel_cliente)return;
+  const e=PROD_ETAPAS.find(x=>x.k===o.status_prod); if(!e)return;
+  const nOrc=o.numero?' '+nfOrc(o.numero):'';
+  let msg='*Orion Engenharia Impressão 3D*\n\n';
+  if(e.k==='producao') msg+='Olá! 😊 Seu pedido'+nOrc+' (*'+o.nome+'*) entrou em *produção*! Já já te aviso quando estiver pronto.';
+  else if(e.k==='pronto') msg+='Boa notícia! ✅ Seu pedido'+nOrc+' (*'+o.nome+'*) está *pronto*! Podemos combinar a entrega/retirada.';
+  else if(e.k==='entregue') msg+='Pedido'+nOrc+' (*'+o.nome+'*) *entregue*! 📦 Muito obrigado pela preferência. Qualquer coisa, é só chamar! 🙏';
+  const n=o.tel_cliente.replace(/\D/g,'');
+  const num=n.length<=11?'55'+n:n;
+  window.open('https://wa.me/'+num+'?text='+encodeURIComponent(msg),'_blank');
+}
 function msgOrcamento(o){
   let txt='*Orion Engenharia Impressão 3D*\n\n';
   txt+='*Orçamento'+(o.numero?' Nº '+nfOrc(o.numero):'')+'*\n';
@@ -1715,6 +1757,7 @@ function renderOrc(){
         ${o.status!=='aprovado'?`<button class="addcor" style="margin:0;flex:1;min-width:100px;border-color:var(--green);color:var(--green)" onclick="orcStatus('${o.id}','aprovado')">✓ Aprovado</button>`:''}
         ${o.status!=='recusado'?`<button class="addcor" style="margin:0;flex:1;min-width:100px;border-color:var(--red);color:var(--red)" onclick="orcStatus('${o.id}','recusado')">✕ Recusado</button>`:`<button class="addcor" style="margin:0;flex:1;min-width:100px" onclick="orcStatus('${o.id}','aberto')">↺ Reabrir</button>`}
       </div>
+      ${o.status==='aprovado'?prodBlock(o):''}
       </div>
       <div class="right"><div class="big ${cls}">${BRL(o.valor)}</div><div class="lbl">orçado</div></div>
       <button class="ed" onclick="editar('orcamentos','${o.id}')">✏️</button><button class="x" onclick="delOrc('${o.id}')">×</button></div>`;
