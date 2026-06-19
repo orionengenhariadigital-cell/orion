@@ -68,7 +68,7 @@
   input:focus,select:focus{border-color:var(--brand)}
   select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238095b4' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 14px center}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  button.act{width:100%;margin-top:16px;border:0;border-radius:13px;padding:14px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;color:#fff;background:linear-gradient(135deg,#1f8fff,#0b66d0);box-shadow:0 8px 20px rgba(31,143,255,.45)}
+  button.act{width:100%;margin-top:16px;border:0;border-radius:13px;padding:14px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;color:#fff;background:linear-gradient(135deg,#1f8fff,#0b66d0);box-shadow:0 8px 20px rgba(31,143,255,.45);min-width:0;box-sizing:border-box}
   button.act.green{background:linear-gradient(135deg,#22b365,#2ed47a);box-shadow:0 8px 20px rgba(46,212,122,.35)}
   button.act:active{transform:translateY(1px)}
   button.act.ghost{background:rgba(255,255,255,.06);border:1.5px solid var(--brand-soft);color:var(--brand-soft);box-shadow:none;font-weight:700}
@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.7</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.8</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -649,8 +649,8 @@
       <label>WhatsApp (com DDD, só números)</label>
       <input id="cli_tel" type="text" inputmode="numeric" placeholder="Ex: 19989543506" autocomplete="off">
       <div style="display:flex;gap:8px;margin:14px 0 6px">
-        <button class="act" style="flex:1" onclick="guard(confirmarCli)">📱 Enviar no WhatsApp</button>
-        <button class="act ghost" style="flex:0 0 auto" onclick="fecharCli()">Cancelar</button>
+        <button class="act" style="flex:2;white-space:nowrap" onclick="guard(confirmarCli)">📱 Enviar</button>
+        <button class="act ghost" style="flex:1" onclick="fecharCli()">Cancelar</button>
       </div>
       <div id="cli_lista" style="margin-top:8px"></div>
     </div>
@@ -662,8 +662,8 @@
       <div style="color:var(--muted);font-size:12.5px;margin-bottom:16px" id="editSub"></div>
       <div id="editCampos"></div>
       <div style="display:flex;gap:8px;margin-top:18px">
-        <button class="act" style="flex:1" onclick="guard(salvarEdit)">Salvar alterações</button>
-        <button class="act ghost" style="flex:0 0 auto" onclick="fecharEdit()">Cancelar</button>
+        <button class="act" style="flex:2" onclick="guard(salvarEdit)">Salvar</button>
+        <button class="act ghost" style="flex:1" onclick="fecharEdit()">Cancelar</button>
       </div>
     </div>
   </div>
