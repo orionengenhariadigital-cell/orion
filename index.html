@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.2</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.3</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -515,8 +515,8 @@
 
     <h2 class="sec">🔄 Recalcular custos</h2>
     <div class="card">
-      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Recalcula o custo de todos os orçamentos usando a potência atual das máquinas e os preços atuais. Use depois de ajustar a potência de uma máquina. <b>Faça um backup antes.</b></p>
-      <button class="act" onclick="guard(recalcularCustos)">🔄 Recalcular custos dos orçamentos</button>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Recalcula o custo dos orçamentos e vendas usando a potência atual das máquinas e os preços atuais. O preço de venda NÃO muda — só o custo e o lucro. Use depois de ajustar a potência de uma máquina. <b>Faça um backup antes.</b></p>
+      <button class="act" onclick="guard(recalcularCustos)">🔄 Recalcular custos (orçamentos e vendas)</button>
     </div>
 
     <h2 class="sec">🎨 Personalização (tema)</h2>
@@ -2086,17 +2086,48 @@ function custoOrcDeDados(o){
 }
 async function recalcularCustos(){
   const nOrc=db.orcamentos.filter(o=>(o.cores||[]).some(c=>c.filId)).length;
-  if(!confirm('🔄 Recalcular custos\n\nIsto vai recalcular o custo de '+nOrc+' orçamentos usando a potência atual das máquinas, o preço do kWh e os preços de filamento atuais.\n\n⚠️ Faça um backup antes (botão acima), por segurança.\n\nDeseja continuar?'))return;
+  const nVen=db.vendas.length;
+  if(!confirm('🔄 Recalcular custos\n\nVai recalcular:\n• '+nOrc+' orçamentos (completo)\n• '+nVen+' vendas (custo e lucro — o preço de venda NÃO muda)\n\nUsa a potência atual das máquinas e os preços atuais.\n\n⚠️ Faça um backup antes (botão acima).\n\nContinuar?'))return;
   toast('Recalculando...');
-  let ok=0, pulou=0;
+  let okO=0, okV=0;
+  // orçamentos (têm filId — recálculo completo)
   for(const o of db.orcamentos){
-    if(!(o.cores||[]).some(c=>c.filId)){ pulou++; continue; }
+    if(!(o.cores||[]).some(c=>c.filId)) continue;
     const novoCusto=custoOrcDeDados(o);
     const {error}=await sb.from('orcamentos').update({custo:novoCusto}).eq('id',o.id);
-    if(!error) ok++;
+    if(!error) okO++;
+  }
+  // vendas (sem filId — identifica filamento pelo nome tipo+cor)
+  for(const v of db.vendas){
+    const novoCusto=custoVendaDeDados(v);
+    if(novoCusto==null) continue;
+    const novoLucro=Math.round(((+v.venda||0)-novoCusto)*100)/100;
+    const {error}=await sb.from('vendas').update({custo:novoCusto,lucro:novoLucro}).eq('id',v.id);
+    if(!error) okV++;
   }
   await carregarTudo();
-  toast('✓ '+ok+' orçamentos recalculados'+(pulou>0?' ('+pulou+' sem dados, pulados)':''));
+  toast('✓ '+okO+' orçamentos e '+okV+' vendas recalculados');
+}
+function custoVendaDeDados(v){
+  // recalcula custo da venda; filamento identificado por tipo+cor (vendas não guardam filId)
+  const c=cfg();
+  let gTotal=0, custoFil=0, achouAlgum=false;
+  (v.cores||[]).forEach(cor=>{
+    // tenta achar o filamento pelo tipo+cor
+    const f=db.filamentos.find(x=>x.tipo===cor.tipo && (x.cor===cor.cor || nomeFil(x)===cor.cor));
+    gTotal+=(+cor.g||0);
+    if(f){ custoFil+=(+cor.g||0)*precoPorGrama(f); achouAlgum=true; }
+  });
+  if(!achouAlgum && (v.cores||[]).length>0) return null; // não conseguiu identificar nenhum filamento
+  const perda=+v.perda_g||0;
+  const precoMedioG=gTotal>0?custoFil/gTotal:0;
+  custoFil+=perda*precoMedioG;
+  const tempo=+v.tempo_horas||0;
+  const maq=db.maquinas.find(x=>x.id===v.maquina_id);
+  const energia=maq?(maq.potencia_w/1000)*tempo*c.preco_kwh:0;
+  const desgaste=maq?depHora(maq.valor_compra,maq.vida_util_horas)*tempo:0;
+  const custo=(custoFil+energia+desgaste)*(1+(c.taxa_falha||0)/100);
+  return Math.round(custo*100)/100;
 }
 function exportarBackup(){
   const dados={
