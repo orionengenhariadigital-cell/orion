@@ -152,7 +152,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.2</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v3.3</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -1645,7 +1645,7 @@ function renderOrc(){
     const badge=o.status==='aprovado'?'<span class="badge" style="background:var(--green)">✓ aprovado</span>':(o.status==='recusado'?'<span class="badge" style="background:var(--red)">✕ recusado</span>':'');
     return `<div class="item">${o.foto_url?`<img class="thumb" src="${o.foto_url}">`:''}<div class="main">
       <div class="t">${o.numero?'<span class="badge" style="background:var(--brand)">'+nfOrc(o.numero)+'</span> ':''}${o.nome} ${badge} <span class="badge" style="background:var(--panel-2);color:var(--muted)">${diasTxt}</span></div>
-      <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · custo ${BRL(o.custo)}${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.tel_cliente?'<br>📱 '+o.tel_cliente:''}${o.obs?'<br>📝 '+o.obs:''}</div>
+      <div class="s">${d} · ${(+o.gramas).toLocaleString('pt-BR')}g · <span style="color:var(--red)">custo ${BRL(o.custo)}</span>${(+o.desconto)>0?' · desc '+BRL(o.desconto):''} · <b class="${cls}">lucro ${BRL(lucroO)} (${pctO}%)</b>${o.tel_cliente?'<br>📱 '+o.tel_cliente:''}${o.obs?'<br>📝 '+o.obs:''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button class="addcor" style="margin:0;flex:1;min-width:130px" onclick="orcVirarVenda('${o.id}')">➡️ Virar venda</button>
         <button class="addcor" style="margin:0;flex:1;min-width:130px;border-color:#25d366;color:#25d366" onclick="enviarWhatsFixo('${o.id}')">📱 Meu Whats</button>
@@ -1804,7 +1804,7 @@ function renderVendas(){
     const ncores=(v.cores&&v.cores.length)||0;
     return `<div class="item">${thumb}<div class="main">
       <div class="t">${v.numero?'<span class="badge" style="background:var(--brand)">'+nfVenda(v.numero)+'</span> ':''}${v.nome}${ncores>1?` <span class="badge" style="background:var(--brand-soft)">${ncores} cores</span>`:''}</div>
-      <div class="s">${d} · ${(+v.gramas).toLocaleString('pt-BR')} g · ${v.tempo_horas||0}h · custo ${BRL(v.custo)}${v.obs?'<br>📝 '+v.obs:''}</div></div>
+      <div class="s">${d} · ${(+v.gramas).toLocaleString('pt-BR')} g · ${v.tempo_horas||0}h · <span style="color:var(--red)">custo ${BRL(v.custo)}</span>${v.obs?'<br>📝 '+v.obs:''}</div></div>
       <div class="right"><div class="big ${cls}">${BRL(v.lucro)}</div><div class="lbl">venda ${BRL(v.venda)}</div></div>
       <button class="ed" onclick="editar('vendas','${v.id}')">✏️</button><button class="x" onclick="delVenda('${v.id}')">×</button></div>`;
   }).join('');
