@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.1</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.2</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -511,6 +511,12 @@
     <div class="card">
       <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Baixe uma cópia de segurança de todos os seus dados (filamentos, vendas, orçamentos, peças...). Guarde o arquivo num lugar seguro.</p>
       <button class="act" onclick="exportarBackup()">⬇️ Baixar backup completo</button>
+    </div>
+
+    <h2 class="sec">🔄 Recalcular custos</h2>
+    <div class="card">
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Recalcula o custo de todos os orçamentos usando a potência atual das máquinas e os preços atuais. Use depois de ajustar a potência de uma máquina. <b>Faça um backup antes.</b></p>
+      <button class="act" onclick="guard(recalcularCustos)">🔄 Recalcular custos dos orçamentos</button>
     </div>
 
     <h2 class="sec">🎨 Personalização (tema)</h2>
@@ -2057,7 +2063,41 @@ function carregarTema(){
   const b=document.getElementById('t_brand'),s=document.getElementById('t_soft'),g=document.getElementById('t_bg');
   if(b)b.value=t.brand; if(s)s.value=t.soft; if(g)g.value=t.bg;
 }
-/* ===== BACKUP ===== */
+/* ===== RECALCULAR CUSTOS ===== */
+function custoOrcDeDados(o){
+  // recalcula o custo de um orçamento a partir dos dados salvos
+  const c=cfg();
+  let gTotal=0, custoFil=0;
+  (o.cores||[]).forEach(cor=>{
+    const f=db.filamentos.find(x=>x.id===cor.filId);
+    if(f){ gTotal+=(+cor.g||0); custoFil+=(+cor.g||0)*precoPorGrama(f); }
+  });
+  const perda=+o.perda_g||0;
+  const precoMedioG=gTotal>0?custoFil/gTotal:0;
+  custoFil+=perda*precoMedioG;
+  const tempo=+o.tempo_horas||0;
+  const trabMin=+o.trab_min||0;
+  const maq=db.maquinas.find(x=>x.id===o.maquina_id);
+  const energia=maq?(maq.potencia_w/1000)*tempo*c.preco_kwh:0;
+  const desgaste=maq?depHora(maq.valor_compra,maq.vida_util_horas)*tempo:0;
+  const maoObra=(c.valor_hora_mao_obra||0)*(trabMin/60);
+  const custo=(custoFil+energia+desgaste+maoObra)*(1+(c.taxa_falha||0)/100);
+  return Math.round(custo*100)/100;
+}
+async function recalcularCustos(){
+  const nOrc=db.orcamentos.filter(o=>(o.cores||[]).some(c=>c.filId)).length;
+  if(!confirm('🔄 Recalcular custos\n\nIsto vai recalcular o custo de '+nOrc+' orçamentos usando a potência atual das máquinas, o preço do kWh e os preços de filamento atuais.\n\n⚠️ Faça um backup antes (botão acima), por segurança.\n\nDeseja continuar?'))return;
+  toast('Recalculando...');
+  let ok=0, pulou=0;
+  for(const o of db.orcamentos){
+    if(!(o.cores||[]).some(c=>c.filId)){ pulou++; continue; }
+    const novoCusto=custoOrcDeDados(o);
+    const {error}=await sb.from('orcamentos').update({custo:novoCusto}).eq('id',o.id);
+    if(!error) ok++;
+  }
+  await carregarTudo();
+  toast('✓ '+ok+' orçamentos recalculados'+(pulou>0?' ('+pulou+' sem dados, pulados)':''));
+}
 function exportarBackup(){
   const dados={
     exportado_em:new Date().toISOString(),
