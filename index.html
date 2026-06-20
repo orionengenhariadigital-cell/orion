@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.5</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.6</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -1055,7 +1055,7 @@ function renderMaq(){
   const box=document.getElementById('listaMaq');
   document.getElementById('maqCount').textContent=db.maquinas.length?db.maquinas.length+' itens':'';
   const sel=document.getElementById('v_maq');
-  sel.innerHTML='<option value="">— sem máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  sel.innerHTML='<option value="">— selecione a máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
   if(!db.maquinas.length){box.innerHTML='<div class="empty"><span class="em">🛠️</span>Nenhuma máquina cadastrada.</div>';return}
   box.innerHTML=maqsOrd().map(m=>`<div class="item">
     <div class="main"><div class="t">${m.nome} <span class="badge" style="background:var(--brand-soft)">${m.tipo||''}</span></div>
@@ -1295,6 +1295,7 @@ async function salvarOrcamento(){
   const {gTotal,custo,cores,perda,tempo,trabMin,valor,desconto,descPct}=calcOrc();
   if(!nome){toast('Dê um nome ao orçamento',true);return}
   if(!cores.length){toast('Adicione ao menos 1 cor',true);return}
+  if(!document.getElementById('o_maq').value){toast('Selecione a máquina usada',true);document.getElementById('o_maq').focus();return}
   let foto_url=null; if(pendingPhoto.o){ toast('Enviando foto...'); foto_url=await uploadPhoto(pendingPhoto.o); }
   const dados={
     nome,gramas:gTotal,perda_g:perda,tempo_horas:tempo,trab_min:trabMin,
@@ -1558,7 +1559,7 @@ function renderPd(){
     const sel=document.getElementById(pref+'_fil');
     if(sel){const a=sel.value;sel.innerHTML='<option value="">— selecione —</option>'+filsOrd().map(f=>`<option value="${f.id}">${nomeFil(f)} · ${f.tipo} (${(+f.restante).toLocaleString('pt-BR')}g)</option>`).join('');sel.value=a;}
     const selM=document.getElementById(pref+'_maq');
-    if(selM){const a=selM.value;selM.innerHTML='<option value="">— sem máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');selM.value=a;}
+    if(selM){const a=selM.value;selM.innerHTML='<option value="">— selecione a máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');selM.value=a;}
     const dt=document.getElementById(pref+'_data'); if(dt&&!dt.value) dt.value=new Date().toISOString().slice(0,10);
   });
   const box=document.getElementById('listaPd'); if(!box)return;
@@ -1625,6 +1626,7 @@ function calcPeca(){
 async function salvarPeca(){
   const nome=(document.getElementById('p_nome').value||'').trim();
   if(!nome){toast('Dê um nome à peça',true);return}
+  if(!document.getElementById('p_maq').value){toast('Selecione a máquina usada',true);document.getElementById('p_maq').focus();return}
   const {gTotal,custoUnit,cores,perda,qtd}=calcPeca();
   const abate=document.getElementById('p_abate').checked;
   const coresTxt=cores.map(c=>{const f=db.filamentos.find(x=>x.id===c.filId);return f?nomeFil(f):'';}).filter(Boolean).join(' + ');
@@ -1756,7 +1758,7 @@ function abrirCartao(){
 function fecharCartao(){ document.getElementById('cartaoModal').style.display='none'; }
 function renderPecas(){
   const sel=document.getElementById('p_maq');
-  if(sel){const a=sel.value;sel.innerHTML='<option value="">— sem máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');sel.value=a;}
+  if(sel){const a=sel.value;sel.innerHTML='<option value="">— selecione a máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');sel.value=a;}
   document.querySelectorAll('#p_filcores .cor-row select').forEach(s=>{const a=s.value;s.innerHTML=corOptions(a);s.value=a;});
   refreshAcRows('p');
   const emEstoque=abc(db.pecas.filter(p=>!p.vendida && (+p.qtd||0)>0),p=>p.nome);
@@ -1802,7 +1804,7 @@ function renderImp(){
 }
 function renderOrc(){
   const sel=document.getElementById('o_maq');
-  if(sel){const a=sel.value;sel.innerHTML='<option value="">— sem máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');sel.value=a;}
+  if(sel){const a=sel.value;sel.innerHTML='<option value="">— selecione a máquina —</option>'+maqsOrd().map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');sel.value=a;}
   if(!document.querySelectorAll('#o_cores .cor-row').length) addCorRowO();
   refreshCorRowsO();
   const box=document.getElementById('listaOrc'); if(!box)return;
@@ -1903,6 +1905,7 @@ async function registrarVenda(){
   const tempo=getTempo();
   if(!nome){toast('Dê um nome à peça',true);return}
   if(!cores.length){toast('Adicione ao menos 1 cor com gramas',true);return}
+  if(!document.getElementById('v_maq').value){toast('Selecione a máquina usada',true);document.getElementById('v_maq').focus();return}
   // perda é distribuída proporcionalmente entre as cores usadas
   const fatorPerda = gTotal>0 ? (gTotal+perda)/gTotal : 1;
   // valida estoque (força número, e oferece corrigir o estoque se faltar)
