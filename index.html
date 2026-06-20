@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.3</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.4</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -513,10 +513,10 @@
       <button class="act" onclick="exportarBackup()">⬇️ Baixar backup completo</button>
     </div>
 
-    <h2 class="sec">🔄 Recalcular custos</h2>
+    <h2 class="sec">⚡ Corrigir energia</h2>
     <div class="card">
-      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Recalcula o custo dos orçamentos e vendas usando a potência atual das máquinas e os preços atuais. O preço de venda NÃO muda — só o custo e o lucro. Use depois de ajustar a potência de uma máquina. <b>Faça um backup antes.</b></p>
-      <button class="act" onclick="guard(recalcularCustos)">🔄 Recalcular custos (orçamentos e vendas)</button>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Corrige <b>apenas a energia</b> dos orçamentos e vendas (de uma potência antiga para a atual). O material, o preço de venda e o resto NÃO mudam — só o custo de energia e o lucro. Use depois de ajustar a potência de uma máquina. <b>Faça um backup antes.</b></p>
+      <button class="act" onclick="guard(recalcularCustos)">⚡ Corrigir energia (orçamentos e vendas)</button>
     </div>
 
     <h2 class="sec">🎨 Personalização (tema)</h2>
@@ -2085,49 +2085,43 @@ function custoOrcDeDados(o){
   return Math.round(custo*100)/100;
 }
 async function recalcularCustos(){
-  const nOrc=db.orcamentos.filter(o=>(o.cores||[]).some(c=>c.filId)).length;
-  const nVen=db.vendas.length;
-  if(!confirm('🔄 Recalcular custos\n\nVai recalcular:\n• '+nOrc+' orçamentos (completo)\n• '+nVen+' vendas (custo e lucro — o preço de venda NÃO muda)\n\nUsa a potência atual das máquinas e os preços atuais.\n\n⚠️ Faça um backup antes (botão acima).\n\nContinuar?'))return;
-  toast('Recalculando...');
+  // Corrige SOMENTE a energia: ajusta o custo pela diferença entre a potência antiga e a atual.
+  const potAntiga=prompt('Qual potência (W) estava cadastrada ANTES na máquina?\n(ex: 1200 — era o valor antigo da Bambu)','1200');
+  if(potAntiga===null)return;
+  const pAntiga=parseFloat((potAntiga||'').replace(',','.'));
+  if(isNaN(pAntiga)||pAntiga<=0){ toast('Potência inválida',true); return; }
+  const c=cfg();
+  const maqs=db.maquinas;
+  if(!maqs.length){ toast('Cadastre a máquina primeiro',true); return; }
+  const nOrc=db.orcamentos.filter(o=>o.maquina_id&&(+o.tempo_horas)>0).length;
+  const nVen=db.vendas.filter(v=>v.maquina_id&&(+v.tempo_horas)>0).length;
+  if(!confirm('🔄 Corrigir energia\n\nVai ajustar o custo de:\n• '+nOrc+' orçamentos\n• '+nVen+' vendas\n\nApenas a ENERGIA será corrigida (de '+pAntiga+'W para a potência atual). O material, o preço de venda e o resto NÃO mudam.\n\n⚠️ Faça um backup antes.\n\nContinuar?'))return;
+  toast('Corrigindo energia...');
   let okO=0, okV=0;
-  // orçamentos (têm filId — recálculo completo)
   for(const o of db.orcamentos){
-    if(!(o.cores||[]).some(c=>c.filId)) continue;
-    const novoCusto=custoOrcDeDados(o);
+    const maq=maqs.find(m=>m.id===o.maquina_id); if(!maq) continue;
+    const tempo=+o.tempo_horas||0; if(tempo<=0) continue;
+    const taxa=1+(c.taxa_falha||0)/100;
+    // a energia entra no custo multiplicada pela taxa de falha
+    const energiaAntiga=(pAntiga/1000)*tempo*c.preco_kwh*taxa;
+    const energiaNova=(maq.potencia_w/1000)*tempo*c.preco_kwh*taxa;
+    const novoCusto=Math.round(((+o.custo||0)-energiaAntiga+energiaNova)*100)/100;
     const {error}=await sb.from('orcamentos').update({custo:novoCusto}).eq('id',o.id);
     if(!error) okO++;
   }
-  // vendas (sem filId — identifica filamento pelo nome tipo+cor)
   for(const v of db.vendas){
-    const novoCusto=custoVendaDeDados(v);
-    if(novoCusto==null) continue;
+    const maq=maqs.find(m=>m.id===v.maquina_id); if(!maq) continue;
+    const tempo=+v.tempo_horas||0; if(tempo<=0) continue;
+    const taxa=1+(c.taxa_falha||0)/100;
+    const energiaAntiga=(pAntiga/1000)*tempo*c.preco_kwh*taxa;
+    const energiaNova=(maq.potencia_w/1000)*tempo*c.preco_kwh*taxa;
+    const novoCusto=Math.round(((+v.custo||0)-energiaAntiga+energiaNova)*100)/100;
     const novoLucro=Math.round(((+v.venda||0)-novoCusto)*100)/100;
     const {error}=await sb.from('vendas').update({custo:novoCusto,lucro:novoLucro}).eq('id',v.id);
     if(!error) okV++;
   }
   await carregarTudo();
-  toast('✓ '+okO+' orçamentos e '+okV+' vendas recalculados');
-}
-function custoVendaDeDados(v){
-  // recalcula custo da venda; filamento identificado por tipo+cor (vendas não guardam filId)
-  const c=cfg();
-  let gTotal=0, custoFil=0, achouAlgum=false;
-  (v.cores||[]).forEach(cor=>{
-    // tenta achar o filamento pelo tipo+cor
-    const f=db.filamentos.find(x=>x.tipo===cor.tipo && (x.cor===cor.cor || nomeFil(x)===cor.cor));
-    gTotal+=(+cor.g||0);
-    if(f){ custoFil+=(+cor.g||0)*precoPorGrama(f); achouAlgum=true; }
-  });
-  if(!achouAlgum && (v.cores||[]).length>0) return null; // não conseguiu identificar nenhum filamento
-  const perda=+v.perda_g||0;
-  const precoMedioG=gTotal>0?custoFil/gTotal:0;
-  custoFil+=perda*precoMedioG;
-  const tempo=+v.tempo_horas||0;
-  const maq=db.maquinas.find(x=>x.id===v.maquina_id);
-  const energia=maq?(maq.potencia_w/1000)*tempo*c.preco_kwh:0;
-  const desgaste=maq?depHora(maq.valor_compra,maq.vida_util_horas)*tempo:0;
-  const custo=(custoFil+energia+desgaste)*(1+(c.taxa_falha||0)/100);
-  return Math.round(custo*100)/100;
+  toast('✓ Energia corrigida: '+okO+' orçamentos e '+okV+' vendas');
 }
 function exportarBackup(){
   const dados={
