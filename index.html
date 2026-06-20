@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.7</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.8</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -513,11 +513,13 @@
       <button class="act" onclick="exportarBackup()">⬇️ Baixar backup completo</button>
     </div>
 
+    <div style="display:none">
     <h2 class="sec">⚡ Atribuir máquina aos antigos</h2>
     <div class="card">
       <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Os registros antigos ficaram <b>sem máquina</b> (sem custo de energia). Isto atribui a máquina usada e <b>soma a energia + desgaste</b> ao custo. O material e o preço de venda NÃO mudam. <b>Faça um backup antes.</b></p>
       <button class="act" onclick="guard(recalcularCustos)">⚡ Atribuir máquina e somar energia</button>
       <button class="act ghost" style="margin-top:10px" onclick="guard(moverMaquina)">🔀 Mover registros de uma máquina para outra</button>
+    </div>
     </div>
 
     <h2 class="sec">🎨 Personalização (tema)</h2>
