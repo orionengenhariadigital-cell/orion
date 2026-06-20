@@ -153,7 +153,7 @@
     <button class="act" onclick="entrar()">Entrar</button>
     <small class="note">Use o mesmo login nos dois celulares para compartilhar os dados.</small>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.6</div>
+  <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.5">v4.7</div>
 </div>
 
 <!-- ================= APP ================= -->
@@ -517,6 +517,7 @@
     <div class="card">
       <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Os registros antigos ficaram <b>sem máquina</b> (sem custo de energia). Isto atribui a máquina usada e <b>soma a energia + desgaste</b> ao custo. O material e o preço de venda NÃO mudam. <b>Faça um backup antes.</b></p>
       <button class="act" onclick="guard(recalcularCustos)">⚡ Atribuir máquina e somar energia</button>
+      <button class="act ghost" style="margin-top:10px" onclick="guard(moverMaquina)">🔀 Mover registros de uma máquina para outra</button>
     </div>
 
     <h2 class="sec">🎨 Personalização (tema)</h2>
@@ -2086,6 +2087,44 @@ function custoOrcDeDados(o){
   const maoObra=(c.valor_hora_mao_obra||0)*(trabMin/60);
   const custo=(custoFil+energia+desgaste+maoObra)*(1+(c.taxa_falha||0)/100);
   return Math.round(custo*100)/100;
+}
+async function moverMaquina(){
+  const maqs=db.maquinas;
+  if(maqs.length<2){ toast('Você precisa de 2 máquinas cadastradas',true); return; }
+  const lista=maqs.map((m,i)=>(i+1)+') '+m.nome).join('\n');
+  const de=prompt('Mover registros DE qual máquina?\n\n'+lista+'\n\nDigite o número:','');
+  if(de===null)return;
+  const iDe=parseInt(de)-1; if(!(iDe>=0&&iDe<maqs.length)){toast('Opção inválida',true);return;}
+  const para=prompt('Mover PARA qual máquina?\n\n'+lista+'\n\nDigite o número:','');
+  if(para===null)return;
+  const iPara=parseInt(para)-1; if(!(iPara>=0&&iPara<maqs.length)){toast('Opção inválida',true);return;}
+  if(iDe===iPara){toast('Escolha máquinas diferentes',true);return;}
+  const mDe=maqs[iDe], mPara=maqs[iPara];
+  const c=cfg(); const taxa=1+(c.taxa_falha||0)/100;
+  const orcs=db.orcamentos.filter(o=>o.maquina_id===mDe.id);
+  const vens=db.vendas.filter(v=>v.maquina_id===mDe.id);
+  if(!orcs.length && !vens.length){ toast('Nenhum registro na '+mDe.nome); return; }
+  if(!confirm('🔀 Mover registros\n\nDe: '+mDe.nome+'\nPara: '+mPara.nome+'\n\n• '+orcs.length+' orçamentos\n• '+vens.length+' vendas\n\nA energia e o desgaste serão recalculados para a máquina nova. Material e preço de venda NÃO mudam.\n\n⚠️ Backup antes.\n\nContinuar?'))return;
+  toast('Movendo...');
+  const delta=(tempo)=>{
+    const eDe=(mDe.potencia_w/1000)*tempo*c.preco_kwh, dgDe=depHora(mDe.valor_compra,mDe.vida_util_horas)*tempo;
+    const ePara=(mPara.potencia_w/1000)*tempo*c.preco_kwh, dgPara=depHora(mPara.valor_compra,mPara.vida_util_horas)*tempo;
+    return (ePara+dgPara-eDe-dgDe)*taxa;
+  };
+  let okO=0, okV=0;
+  for(const o of orcs){
+    const novoCusto=Math.round(((+o.custo||0)+delta(+o.tempo_horas||0))*100)/100;
+    const {error}=await sb.from('orcamentos').update({custo:novoCusto,maquina_id:mPara.id}).eq('id',o.id);
+    if(!error) okO++;
+  }
+  for(const v of vens){
+    const novoCusto=Math.round(((+v.custo||0)+delta(+v.tempo_horas||0))*100)/100;
+    const novoLucro=Math.round(((+v.venda||0)-novoCusto)*100)/100;
+    const {error}=await sb.from('vendas').update({custo:novoCusto,lucro:novoLucro,maquina_id:mPara.id}).eq('id',v.id);
+    if(!error) okV++;
+  }
+  await carregarTudo();
+  toast('✓ '+okO+' orçamentos e '+okV+' vendas movidos para '+mPara.nome);
 }
 async function recalcularCustos(){
   // Atribui uma máquina aos registros que estão SEM máquina e soma energia + desgaste ao custo.
