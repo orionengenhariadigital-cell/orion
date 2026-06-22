@@ -166,6 +166,7 @@
       <h1>Orion Engenharia</h1>
       <p>Impressão 3D · @orionimpressao3d</p>
     </div>
+    <button class="out" onclick="GADM.abrir()" style="margin-right:8px" title="Clientes do Gestor (SaaS)">👑</button>
     <button class="out" onclick="sair()">Sair</button>
   </header>
 
@@ -2638,6 +2639,63 @@ document.addEventListener('focusout',e=>{
 });
 
 checkSession();
+</script>
+<!-- ====== PAINEL CLIENTES DO GESTOR (SaaS) ====== -->
+<div id="g_overlay" style="display:none;position:fixed;inset:0;background:#070b14;z-index:90000;overflow:auto;color:#eaf1ff;font-family:inherit">
+  <div style="max-width:620px;margin:0 auto;padding:18px 16px 60px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h1 style="font-size:20px;margin:0">\ud83d\udc51 Clientes do Gestor</h1>
+      <button onclick="GADM.fechar()" style="background:transparent;border:1px solid #2a3e63;color:#9fb2d4;border-radius:10px;padding:9px 14px;cursor:pointer;font-size:14px">Fechar</button>
+    </div>
+    <div id="g_login">
+      <div style="color:#8095b4;font-size:13px;margin-bottom:8px">Entre com a conta de administrador do Gestor (gestorimpressao3d@gmail.com).</div>
+      <input id="g_email" type="email" placeholder="Email admin" autocomplete="username" style="width:100%;box-sizing:border-box;background:#0a1322;color:#eaf1ff;border:1px solid #23375c;border-radius:12px;padding:14px;font-size:16px;margin-top:8px">
+      <input id="g_senha" type="password" placeholder="Senha" autocomplete="current-password" style="width:100%;box-sizing:border-box;background:#0a1322;color:#eaf1ff;border:1px solid #23375c;border-radius:12px;padding:14px;font-size:16px;margin-top:8px">
+      <button id="g_btn" onclick="GADM.entrar()" style="width:100%;background:#1f8fff;color:#fff;border:0;border-radius:14px;padding:15px;font-size:16px;font-weight:700;margin-top:14px;cursor:pointer">Entrar</button>
+      <div id="g_err" style="color:#ff6b6b;font-size:13px;margin-top:10px;white-space:pre-line"></div>
+    </div>
+    <div id="g_painel" style="display:none">
+      <div id="g_quem" style="color:#8095b4;font-size:12px;margin-bottom:10px"></div>
+      <input id="g_busca" placeholder="\ud83d\udd0e Buscar por nome ou email..." oninput="GADM.filtrar()" style="width:100%;box-sizing:border-box;background:#0a1322;color:#eaf1ff;border:1px solid #23375c;border-radius:12px;padding:13px;font-size:15px;margin-bottom:14px">
+      <div id="g_stats" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+      <div id="g_lista"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="GADM.carregar()" style="flex:1;background:transparent;border:1px solid #23375c;color:#9fb2d4;border-radius:12px;padding:13px;cursor:pointer">\u21bb Atualizar</button>
+        <button onclick="GADM.sairGestor()" style="flex:1;background:transparent;border:1px solid #23375c;color:#9fb2d4;border-radius:12px;padding:13px;cursor:pointer">Trocar conta</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var GU="https://bzeuyahlxtnxfniftqdy.supabase.co";
+  var GK="sb_publishable_Vk1eOgDYc4P0mosEIpWApA_kgRuhAfZ";
+  var sbG=supabase.createClient(GU,GK,{auth:{storageKey:"gadm-auth",persistSession:true,autoRefreshToken:true}});
+  var TODOS=[],USO={};
+  function el(id){return document.getElementById(id);}
+  function esc(s){return(""+s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  function gt(m,err){var t=el("g_t");if(!t){t=document.createElement("div");t.id="g_t";t.style.cssText="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#16243f;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;z-index:99999;max-width:90%;text-align:center";document.body.appendChild(t);}t.textContent=m;t.style.borderLeft="4px solid "+(err?"#ff6b6b":"#22c55e");t.style.opacity="1";clearTimeout(t._h);t._h=setTimeout(function(){t.style.transition="opacity .4s";t.style.opacity="0";},2400);}
+  function gconf(msg){return new Promise(function(res){var ov=document.createElement("div");ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px";var cd=document.createElement("div");cd.style.cssText="background:#0e1830;border:1px solid #24375c;border-radius:18px;max-width:380px;width:100%;padding:22px";cd.innerHTML='<div style="font-size:15px;line-height:1.5;color:#eaf1ff;white-space:pre-line;margin-bottom:18px">'+esc(msg)+'</div>';var r=document.createElement("div");r.style.cssText="display:flex;gap:10px";var a=document.createElement("button");a.textContent="Cancelar";a.style.cssText="flex:1;background:transparent;color:#9fb2d4;border:1px solid #2a3e63;border-radius:12px;padding:13px;font-weight:600";var b=document.createElement("button");b.textContent="Confirmar";b.style.cssText="flex:1;background:#1f8fff;color:#fff;border:0;border-radius:12px;padding:13px;font-weight:700";function cl(v){try{document.body.removeChild(ov);}catch(e){}res(v);}a.onclick=function(){cl(false);};b.onclick=function(){cl(true);};ov.onclick=function(e){if(e.target===ov)cl(false);};r.appendChild(a);r.appendChild(b);cd.appendChild(r);ov.appendChild(cd);document.body.appendChild(ov);});}
+  function gprompt(msg,def){return new Promise(function(res){var ov=document.createElement("div");ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px";var cd=document.createElement("div");cd.style.cssText="background:#0e1830;border:1px solid #24375c;border-radius:18px;max-width:380px;width:100%;padding:22px";cd.innerHTML='<div style="font-size:15px;line-height:1.5;color:#eaf1ff;white-space:pre-line;margin-bottom:14px">'+esc(msg)+'</div>';var inp=document.createElement("input");inp.type="text";inp.value=(def==null?"":def);inp.style.cssText="width:100%;box-sizing:border-box;background:#0a1322;color:#eaf1ff;border:1px solid #2a3e63;border-radius:12px;padding:13px;font-size:16px;margin-bottom:16px";cd.appendChild(inp);var r=document.createElement("div");r.style.cssText="display:flex;gap:10px";var a=document.createElement("button");a.textContent="Cancelar";a.style.cssText="flex:1;background:transparent;color:#9fb2d4;border:1px solid #2a3e63;border-radius:12px;padding:13px;font-weight:600";var b=document.createElement("button");b.textContent="OK";b.style.cssText="flex:1;background:#1f8fff;color:#fff;border:0;border-radius:12px;padding:13px;font-weight:700";function cl(v){try{document.body.removeChild(ov);}catch(e){}res(v);}a.onclick=function(){cl(null);};b.onclick=function(){cl(inp.value);};inp.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();cl(inp.value);}};ov.onclick=function(e){if(e.target===ov)cl(null);};r.appendChild(a);r.appendChild(b);cd.appendChild(r);ov.appendChild(cd);document.body.appendChild(ov);setTimeout(function(){try{inp.focus();inp.select();}catch(e){}},60);});}
+  var agora=new Date();
+  function fmt(d){return d?new Date(d).toLocaleDateString("pt-BR"):"\u2014";}
+  function fmtMin(m){m=+m||0;if(m<60)return m+" min";var h=Math.floor(m/60),mm=m%60;return h+"h"+(mm?(" "+mm+"min"):"");}
+  function st(u){if(u.status==="liberado")return{t:"Liberado",c:"#22c55e"};if(u.status==="pago")return(!u.pago_ate||new Date(u.pago_ate)>agora)?{t:"Pago",c:"#22c55e"}:{t:"Pgto venceu",c:"#ff6b6b"};if(u.status==="teste")return(u.teste_fim&&new Date(u.teste_fim)>agora)?{t:"Em teste",c:"#1f8fff"}:{t:"Teste acabou",c:"#ff6b6b"};return{t:u.status||"\u2014",c:"#8095b4"};}
+  function showPainel(user){el("g_login").style.display="none";el("g_painel").style.display="block";el("g_quem").textContent=user&&user.email?("Logado como "+user.email):"";}
+  var GADM={};
+  GADM.abrir=function(){el("g_overlay").style.display="block";document.body.style.overflow="hidden";restore();};
+  GADM.fechar=function(){el("g_overlay").style.display="none";document.body.style.overflow="";};
+  GADM.entrar=async function(){var email=el("g_email").value.trim(),senha=el("g_senha").value;el("g_err").textContent="";if(!email||!senha){el("g_err").textContent="Preencha email e senha.";return;}el("g_btn").textContent="Entrando...";var r=await sbG.auth.signInWithPassword({email:email,password:senha});el("g_btn").textContent="Entrar";if(r.error){el("g_err").textContent="Login falhou: "+r.error.message;return;}showPainel(r.data.user);GADM.carregar();};
+  GADM.sairGestor=async function(){await sbG.auth.signOut();el("g_painel").style.display="none";el("g_login").style.display="block";};
+  GADM.carregar=async function(){var lista=el("g_lista");lista.innerHTML='<div style="text-align:center;color:#8095b4;padding:30px">Carregando\u2026</div>';var r=await sbG.rpc("admin_usuarios");if(r.error){lista.innerHTML='<div style="color:#ff6b6b;padding:20px;white-space:pre-line">Erro: '+r.error.message+"\n\nEssa conta provavelmente nao e administradora.</div>";el("g_stats").innerHTML="";return;}TODOS=r.data||[];USO={};try{var u=await sbG.rpc("admin_uso");(u.data||[]).forEach(function(x){USO[x.user_id]=x;});}catch(e){}GADM.filtrar();};
+  GADM.filtrar=function(){var q=(el("g_busca").value||"").toLowerCase().trim();var us=TODOS.filter(function(u){return !q||((u.nome||"").toLowerCase().indexOf(q)>=0)||((u.email||"").toLowerCase().indexOf(q)>=0);});var nP=TODOS.filter(function(u){var x=st(u).t;return x==="Pago"||x==="Liberado";}).length;var nT=TODOS.filter(function(u){return st(u).t==="Em teste";}).length;var nV=TODOS.filter(function(u){var x=st(u).t;return x==="Teste acabou"||x==="Pgto venceu";}).length;function cd(n,l,c){return '<div style="flex:1;min-width:74px;background:#0e1830;border-radius:12px;padding:12px;text-align:center"><div style="font-size:24px;font-weight:800;color:'+c+'">'+n+'</div><div style="font-size:11px;color:#8095b4">'+l+'</div></div>';}el("g_stats").innerHTML=cd(TODOS.length,"Total","#eaf1ff")+cd(nT,"Em teste","#1f8fff")+cd(nP,"Pagantes","#22c55e")+cd(nV,"Vencidos","#ff6b6b");var lista=el("g_lista");if(!us.length){lista.innerHTML='<div style="text-align:center;color:#8095b4;padding:30px">'+(TODOS.length?"Nenhum resultado.":"Nenhum cliente ainda.")+'</div>';return;}var bA="background:#1f3a5f;color:#9cc7ff;border:0;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer";var bG="background:#16442e;color:#5ee08a;border:0;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer";var bR="background:#4a1f1f;color:#ff9a9a;border:0;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer";lista.innerHTML=us.map(function(u){var s=st(u);var venc=u.status==="pago"?("Pago ate "+fmt(u.pago_ate)):("Teste ate "+fmt(u.teste_fim));var uso=USO[u.user_id]||{};return '<div style="background:#0e1830;border-radius:14px;padding:14px;margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="min-width:0"><div style="font-weight:700;color:#eaf1ff;font-size:15px">'+esc(u.nome||"(sem nome)")+'</div><div style="font-size:12px;color:#8095b4;margin-top:2px;word-break:break-all">'+esc(u.email||"")+'</div><div style="font-size:12px;color:#8095b4">\ud83d\udcf1 '+esc(u.whatsapp||"\u2014")+'</div></div><span style="background:'+s.c+'22;color:'+s.c+';font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;white-space:nowrap">'+s.t+'</span></div><div style="font-size:11px;color:#6b7da0;margin-top:6px">'+venc+" \u00b7 cadastro "+fmt(u.criado_em)+" \u00b7 ult. acesso "+fmt(u.ultimo_acesso)+'</div><div style="font-size:11px;color:#6b7da0;margin-top:3px">\ud83d\udd11 '+(uso.logins||0)+" logins \u00b7 \u23f1\ufe0f "+fmtMin(uso.tempo_uso_min)+" de uso \u00b7 1\u00ba acesso "+fmt(uso.primeiro_acesso)+'</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"><button onclick="GADM.dias(\''+u.user_id+'\',7)" style="'+bA+'">+7 dias</button><button onclick="GADM.dias(\''+u.user_id+'\',30)" style="'+bA+'">+30 dias</button><button onclick="GADM.pago(\''+u.user_id+'\')" style="'+bG+'">Marcar pago</button><button onclick="GADM.liberar(\''+u.user_id+'\')" style="'+bG+'">Liberar total</button><button onclick="GADM.bloq(\''+u.user_id+'\')" style="'+bR+'">Bloquear</button></div></div>';}).join("");};
+  GADM.dias=async function(uid,dias){var r=await sbG.rpc("admin_liberar_dias",{alvo:uid,dias:dias});if(r.error){gt("Erro: "+r.error.message,true);return;}gt("+"+dias+" dias \u2713");GADM.carregar();};
+  GADM.pago=async function(uid){var meses=await gprompt("Marcar como PAGO por quantos meses?\n(vazio = sem vencimento)");if(meses===null)return;var ate=null;if((""+meses).trim()!==""){var m=parseInt(meses);if(isNaN(m)){gt("Numero invalido",true);return;}var d=new Date();d.setMonth(d.getMonth()+m);ate=d.toISOString();}var r=await sbG.rpc("admin_marcar_pago",{alvo:uid,ate:ate,plano_nome:"mensal"});if(r.error){gt("Erro: "+r.error.message,true);return;}gt("Marcado como pago \u2713");GADM.carregar();};
+  GADM.liberar=async function(uid){if(!await gconf("Liberar acesso TOTAL (sem vencimento)?"))return;var r=await sbG.rpc("admin_liberar_total",{alvo:uid});if(r.error){gt("Erro: "+r.error.message,true);return;}gt("Acesso liberado \u2713");GADM.carregar();};
+  GADM.bloq=async function(uid){if(!await gconf("Bloquear este cliente agora?"))return;var r=await sbG.rpc("admin_bloquear",{alvo:uid});if(r.error){gt("Erro: "+r.error.message,true);return;}gt("Cliente bloqueado");GADM.carregar();};
+  async function restore(){try{var s=await sbG.auth.getSession();if(s.data&&s.data.session){showPainel(s.data.session.user);GADM.carregar();}else{el("g_login").style.display="block";el("g_painel").style.display="none";}}catch(e){el("g_login").style.display="block";}}
+  window.GADM=GADM;
+})();
 </script>
 </body>
 </html>
