@@ -494,6 +494,10 @@
         <div><label>Quantidade (g)</label><input id="f_qtd" type="text" inputmode="decimal" placeholder="ex: 1000" min="0" step="1"></div>
         <div><label>Preço pago (R$)</label><input id="f_preco" type="text" inputmode="decimal" placeholder="0,00" min="0" step="0.01"></div>
       </div>
+      <div class="row" style="margin-top:6px">
+        <div><label>Data de fabricação</label><input id="f_fab" type="date"></div>
+        <div><label>Validade</label><input id="f_val" type="date"></div>
+      </div>
       <div class="calcbox"><span>Preço por grama</span><b id="f_porg">R$ 0,0000</b></div>
       <button class="act" onclick="guard(salvarFilamento)">Adicionar ao estoque</button>
     </div>
@@ -1160,6 +1164,8 @@ async function salvarFilamento(){
   const etiqueta=(document.getElementById('f_tag').value||'').trim();
   const qtd=numF(document.getElementById('f_qtd').value)||0;
   const preco=numF(document.getElementById('f_preco').value)||0;
+  const fab=document.getElementById('f_fab').value||null;
+  const val=document.getElementById('f_val').value||null;
   if(qtd<=0){toast('Informe a quantidade',true);return}
   toast('Salvando...');
   let foto_url=null; if(pendingPhoto.f) foto_url=await uploadPhoto(pendingPhoto.f);
@@ -1169,10 +1175,10 @@ async function salvarFilamento(){
   if(existe){
     res=await sb.from('filamentos').update({
       qtd_inicial:(+existe.qtd_inicial)+qtd, restante:(+existe.restante)+qtd, preco_total:(+existe.preco_total)+preco,
-      foto_url:foto_url||existe.foto_url, cor_hex:cor_hex||existe.cor_hex
+      foto_url:foto_url||existe.foto_url, cor_hex:cor_hex||existe.cor_hex, fabricacao:fab||existe.fabricacao, validade:val||existe.validade
     }).eq('id',existe.id);
   }else{
-    res=await sb.from('filamentos').insert({tipo,cor,etiqueta,cor_hex,qtd_inicial:qtd,restante:qtd,preco_total:preco,foto_url});
+    res=await sb.from('filamentos').insert({tipo,cor,etiqueta,cor_hex,qtd_inicial:qtd,restante:qtd,preco_total:preco,foto_url,fabricacao:fab,validade:val});
   }
   if(res.error){toast('Erro: '+res.error.message,true);return}
   await logAcao((existe?'Reabasteceu filamento: ':'Cadastrou filamento: ')+(cor||tipo)+' '+tipo,'filamento',{
@@ -1181,7 +1187,7 @@ async function salvarFilamento(){
     antes:existe?{qtd_inicial:existe.qtd_inicial,restante:existe.restante,preco_total:existe.preco_total}:null,
     add_qtd:qtd, add_preco:preco
   });
-  ['f_cor','f_tag','f_qtd','f_preco'].forEach(i=>document.getElementById(i).value='');
+  ['f_cor','f_tag','f_qtd','f_preco','f_fab','f_val'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('f_corhex').value='#1f8fff';
   document.getElementById('f_porg').textContent='R$ 0,0000';
   pendingPhoto.f=null;
@@ -1192,6 +1198,7 @@ async function delFil(id){ if(!confirm('Remover filamento?'))return; await sb.fr
 let _filFiltro='todos';
 function setFilFiltro(t){ _filFiltro=t; renderFil(); }
 function verAcabando(){ _filFiltro='acabando'; go('fil'); renderFil(); window.scrollTo(0,0); }
+function _fmtD(d){try{return new Date(String(d).slice(0,10)+'T00:00:00').toLocaleDateString('pt-BR');}catch(e){return d;}}
 function renderFil(){
   const box=document.getElementById('listaFil');
   document.getElementById('filCount').textContent=db.filamentos.length?db.filamentos.length+' itens':'';
@@ -1219,10 +1226,14 @@ function renderFil(){
     const corMat=MAT_COLORS[f.tipo]||'var(--outros)';
     const corReal=f.cor_hex||corMat;
     const low=f.restante<150;
+    const novo=f.criado_em&&((Date.now()-new Date(f.criado_em))<7*86400000);
+    const _hoje=new Date().toISOString().slice(0,10);
+    const venc=f.validade&&(String(f.validade).slice(0,10)<_hoje);
+    const dataLinha=(f.fabricacao||f.validade)?`<div class="s" style="opacity:.85">${f.fabricacao?'🏭 Fab: '+_fmtD(f.fabricacao):''}${f.fabricacao&&f.validade?' · ':''}${f.validade?'⏳ Val: '+(venc?'<span style="color:var(--red)">'+_fmtD(f.validade)+' (vencido)</span>':_fmtD(f.validade)):''}</div>`:'';
     const thumb=f.foto_url?`<img class="thumb" src="${f.foto_url}">`:`<div class="swatch" style="background:${corReal};border:1.5px solid rgba(255,255,255,.25)"></div>`;
     return `<div class="item">${thumb}<div class="main">
-      <div class="t">${nomeFil(f)} <span class="badge" style="background:${corMat}">${f.tipo}</span>${low?'<span class="badge" style="background:var(--amber)">ACABANDO</span>':''}</div>
-      <div class="s">${(+f.restante).toLocaleString('pt-BR')} g de ${(+f.qtd_inicial).toLocaleString('pt-BR')} g · ${BRL(precoPorGrama(f))}/g</div>
+      <div class="t">${nomeFil(f)} <span class="badge" style="background:${corMat}">${f.tipo}</span>${low?'<span class="badge" style="background:var(--amber)">ACABANDO</span>':''}${novo?'<span class="badge" style="background:#2e7d4f">🆕 Novo</span>':''}</div>
+      <div class="s">${(+f.restante).toLocaleString('pt-BR')} g de ${(+f.qtd_inicial).toLocaleString('pt-BR')} g · ${BRL(precoPorGrama(f))}/g</div>${dataLinha}
       <div class="stockbar"><i style="width:${pct}%;background:${corReal}"></i></div></div>
       <button class="ed" onclick="editar('filamentos','${f.id}')">✏️</button><button class="x" onclick="delFil('${f.id}')">×</button></div>`;
   }).join('');
