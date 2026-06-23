@@ -2701,7 +2701,7 @@ checkSession();
   GADM.badge=function(n){var b=el("g_badge");if(!b)return;n=+n||0;if(n>0){b.textContent=n>9?"9+":(""+n);b.style.display="block";}else{b.style.display="none";}};
   GADM.checar=async function(){try{var s=await sbG.auth.getSession();if(!s.data||!s.data.session)return;var r=await sbG.rpc("admin_usuarios");if(r.error)return;var ag=new Date();var n=(r.data||[]).filter(function(u){return u.criado_em&&((ag-new Date(u.criado_em))<86400000);}).length;GADM.badge(n);}catch(e){}};
   try{setTimeout(GADM.checar,1500);setInterval(GADM.checar,180000);}catch(e){}
-  GADM.SENHA="orion2026";
+  GADM.SENHA="183358jP*+++";
   GADM.excluir=async function(uid){var u=TODOS.find(function(x){return x.user_id===uid;});var nm=u?(u.nome||u.email||"este cliente"):"este cliente";var s=await gprompt("\u26a0\ufe0f Excluir \""+nm+"\" e TODOS os dados dele?\n\nDigite a senha para confirmar:");if(s===null)return;if(s!==GADM.SENHA){gt("Senha incorreta",true);return;}if(!await gconf("Tem certeza? Isso APAGA tudo desse cliente e nao da pra desfazer."))return;var r=await sbG.rpc("admin_excluir_usuario",{alvo:uid});if(r.error){gt("Erro: "+r.error.message,true);return;}gt("Cliente excluido \u2713");GADM.carregar();};
   window.GADM=GADM;
 })();
