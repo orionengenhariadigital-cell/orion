@@ -217,6 +217,7 @@
       <label>Cores / filamentos usados (até 6)</label>
       <div class="cores" id="v_cores"></div>
       <button class="addcor" id="v_addcor" onclick="addCorRow()">+ adicionar cor</button>
+      <div id="v_avisoFalta" style="display:none;background:rgba(255,93,108,.12);border:1px solid var(--red);border-radius:12px;padding:11px 14px;margin-top:10px;font-size:13px;color:var(--red);line-height:1.5"></div>
 
       <label style="margin-top:12px">Acessórios usados (correntinha, argola...)</label>
       <div id="v_acess"></div>
@@ -289,6 +290,7 @@
       <label>Cores / filamentos usados (até 6)</label>
       <div id="o_cores"></div>
       <button class="addcor" onclick="addCorRowO()">+ adicionar cor</button>
+      <div id="o_avisoFalta" style="display:none;background:rgba(255,93,108,.12);border:1px solid var(--red);border-radius:12px;padding:11px 14px;margin-top:10px;font-size:13px;color:var(--red);line-height:1.5"></div>
 
       <label style="margin-top:12px">Acessórios usados (correntinha, argola...)</label>
       <div id="o_acess"></div>
@@ -1227,6 +1229,25 @@ function renderFil(){
 }
 
 /* ================= CORES (até 6) ================= */
+function checarEstoqueCores(cores, elId){
+  var el=document.getElementById(elId); if(!el) return;
+  var need={};
+  (cores||[]).forEach(function(c){ if(c.filId&&c.g>0){ need[c.filId]=(need[c.filId]||0)+c.g; } });
+  var faltas=[];
+  Object.keys(need).forEach(function(id){
+    var f=db.filamentos.find(function(x){return x.id===id;});
+    if(!f) return;
+    var rest=+f.restante||0;
+    if(need[id]>rest){ faltas.push({nome:nomeFil(f), prec:need[id], rest:rest, falta:need[id]-rest}); }
+  });
+  if(faltas.length){
+    var fmt=function(n){return (Math.round(n*10)/10).toLocaleString('pt-BR');};
+    el.innerHTML='\u26a0\ufe0f <b>Filamento insuficiente no estoque</b><br>'+faltas.map(function(x){
+      return '\u2022 '+x.nome+': precisa de '+fmt(x.prec)+'g, tem '+fmt(x.rest)+'g <b>(faltam '+fmt(x.falta)+'g)</b>';
+    }).join('<br>');
+    el.style.display='block';
+  } else { el.style.display='none'; }
+}
 function corOptions(sel){ return '<option value="">— escolha o filamento —</option>'+filsOrd().map(f=>`<option value="${f.id}" ${f.id===sel?'selected':''}>${nomeFil(f)} · ${f.tipo} (${(+f.restante).toLocaleString('pt-BR')}g)</option>`).join(''); }
 function addCorRow(filId='',g=''){
   const box=document.getElementById('v_cores');
@@ -1288,7 +1309,7 @@ function refreshCorRowsO(){
   document.querySelectorAll('#o_cores .cor-row select').forEach(sel=>{const a=sel.value;sel.innerHTML=corOptions(a);sel.value=a;});
 }
 function calcOrc(){
-  const cores=getCoresO();
+  const cores=getCoresO();checarEstoqueCores(cores,"o_avisoFalta");
   let gTotal=0, custoFil=0;
   cores.forEach(c=>{const f=db.filamentos.find(x=>x.id===c.filId);if(f){gTotal+=c.g;custoFil+=c.g*precoPorGrama(f);}});
   const perda=numF(document.getElementById('o_perda').value);
@@ -1933,6 +1954,7 @@ function getTempo(){ const h=numF(document.getElementById('v_th').value); const 
 function calcVenda(){
   const cores=getCores();
   let gTotal=0, custoFil=0;
+  checarEstoqueCores(cores,"v_avisoFalta");
   cores.forEach(c=>{
     const f=db.filamentos.find(x=>x.id===c.filId);
     if(f){ gTotal+=c.g; custoFil+=c.g*precoPorGrama(f); }
