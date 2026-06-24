@@ -671,7 +671,7 @@
 
   <!-- ===== EDIÇÃO (modal genérico) ===== -->
   <!-- ===== AGENDA DE CLIENTES (modal) ===== -->
-  <div id="cliModal" style="display:none;position:fixed;inset:0;z-index:62;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)fecharCli()">
+  <div id="cliModal" style="display:none;position:fixed;inset:0;z-index:62;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding:calc(env(safe-area-inset-top) + 20px) 20px 20px;overflow-y:auto" onclick="if(event.target===this)fecharCli()">
     <div style="background:var(--panel);border:1px solid var(--line);border-radius:20px;max-width:420px;width:100%;padding:22px;margin:auto">
       <div style="font-weight:800;font-size:17px;margin-bottom:14px">📱 Enviar orçamento</div>
       <label>Nome do cliente (opcional)</label>
@@ -686,7 +686,7 @@
     </div>
   </div>
 
-  <div id="editModal" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)fecharEdit()">
+  <div id="editModal" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:flex-start;justify-content:center;padding:calc(env(safe-area-inset-top) + 20px) 20px 20px;overflow-y:auto" onclick="if(event.target===this)fecharEdit()">
     <div style="background:var(--panel);border:1px solid var(--line);border-radius:20px;max-width:420px;width:100%;padding:22px;margin:auto">
       <div style="font-weight:800;font-size:17px;margin-bottom:4px" id="editTitulo">Editar</div>
       <div style="color:var(--muted);font-size:12.5px;margin-bottom:16px" id="editSub"></div>
@@ -2743,7 +2743,7 @@ checkSession();
 </script>
 <!-- ====== PAINEL CLIENTES DO GESTOR (SaaS) ====== -->
 <div id="g_overlay" style="display:none;position:fixed;inset:0;background:#070b14;z-index:90000;overflow:auto;color:#eaf1ff;font-family:inherit">
-  <div style="max-width:620px;margin:0 auto;padding:18px 16px 60px">
+  <div style="max-width:620px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 18px) 16px 60px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h1 style="font-size:20px;margin:0">👑 Clientes do Gestor</h1>
       <button onclick="GADM.fechar()" style="background:transparent;border:1px solid #2a3e63;color:#9fb2d4;border-radius:10px;padding:9px 14px;cursor:pointer;font-size:14px">Fechar</button>
