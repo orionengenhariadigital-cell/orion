@@ -51,7 +51,7 @@
   .stat.full{grid-column:1/-1}
   .stat .sub{color:var(--muted);font-size:11.5px;margin-top:3px}
 
-  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(5,8,15,.9);backdrop-filter:blur(16px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
+  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(5,8,15,.96);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
   .tab{border:0;background:transparent;color:var(--muted);font-size:8.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:12px;cursor:pointer;flex:1}
   .tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
 .tab .ti{font-size:20px;line-height:1;display:block}
@@ -148,7 +148,7 @@
   h2.sec.acc.acc-open .acc-chev{transform:rotate(90deg)}
   .sec-body{padding:6px 2px 4px}
   .sec-body.opening{animation:secIn .2s ease}
-  @keyframes secIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+  @keyframes secIn{from{opacity:0}to{opacity:1}}
 </style>
 </head>
 <body>
