@@ -1259,7 +1259,8 @@ function checarEstoqueCores(cores, elId){
     el.style.display='block';
   } else { el.style.display='none'; }
 }
-function corOptions(sel){ return '<option value="">— escolha o filamento —</option>'+filsOrd().map(f=>`<option value="${f.id}" ${f.id===sel?'selected':''}>${nomeFil(f)} · ${f.tipo} (${(+f.restante).toLocaleString('pt-BR')}g)</option>`).join(''); }
+function filsVelhos(){ return db.filamentos.slice().sort(function(a,b){var ka=String(a.fabricacao||a.criado_em||'9999'),kb=String(b.fabricacao||b.criado_em||'9999');return ka<kb?-1:(ka>kb?1:0); }); }
+function corOptions(sel){ return '<option value="">— escolha o filamento —</option>'+filsVelhos().map(f=>`<option value="${f.id}" ${f.id===sel?'selected':''}>${nomeFil(f)} · ${f.tipo} (${(+f.restante).toLocaleString('pt-BR')}g)</option>`).join(''); }
 function addCorRow(filId='',g=''){
   const box=document.getElementById('v_cores');
   if(box.children.length>=6){toast('Máximo de 6 cores',true);return}
