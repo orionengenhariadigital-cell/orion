@@ -52,9 +52,9 @@
   .stat .sub{color:var(--muted);font-size:11.5px;margin-top:3px}
 
   .tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(5,8,15,.96);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
-  .tab{border:0;background:transparent;color:var(--muted);font-size:8.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:12px;cursor:pointer;flex:1}
+  .tab{border:0;background:transparent;color:var(--muted);font-size:7.8px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:12px;cursor:pointer;flex:1}
   .tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
-.tab .ti{font-size:20px;line-height:1;display:block}
+.tab .ti{font-size:18px;line-height:1;display:block}
   .tab.active{color:var(--brand-soft)} .tab.active svg{stroke:var(--brand-soft)}
 
   section{display:none;animation:fade .25s ease} section.active{display:block}
@@ -743,6 +743,19 @@
     <div id="listaHist"></div>
     <small class="note">Toque em "Reverter" para desfazer uma ação. Reverter uma venda devolve o filamento ao estoque.</small>
   </section>
+  <section id="tab-u1">
+    <h2 class="sec">Impressora U1 <span class="count" id="u1Ping">—</span></h2>
+    <div class="card" id="u1Topo">
+      <div id="u1Status" style="font-size:13px;color:var(--muted)">Carregando…</div>
+    </div>
+    <h2 class="sec">Canais de filamento</h2>
+    <div id="u1Canais"></div>
+    <h2 class="sec">Bicos</h2>
+    <div id="u1Bicos"></div>
+    <h2 class="sec">Alertas recentes</h2>
+    <div id="u1Alertas"></div>
+    <small class="note">Atualiza sozinho a cada 10s enquanto esta aba estiver aberta. Precisa do PC da oficina ligado com a ponte rodando.</small>
+  </section>
 </div>
 </div>
 
@@ -757,6 +770,7 @@
   <button class="tab" data-tab="custos" onclick="go('custos')"><span class="ti">💲</span>Dados</button>
   <button class="tab" data-tab="graf" onclick="go('graf')"><span class="ti">📊</span>Resumo</button>
   <button class="tab" data-tab="hist" onclick="go('hist')"><span class="ti">🕐</span>Histórico</button>
+  <button class="tab" data-tab="u1" onclick="go('u1')"><span class="ti">🖨️</span>U1</button>
 </nav>
 
 <div class="toast" id="toast"></div>
@@ -1105,11 +1119,138 @@ function montarSanfonas(){
   });
 }
 
+
+/* ================= ABA IMPRESSORA U1 ================= */
+const U1_URL = "https://vyiuzkxjjhsjzzrfqpds.supabase.co";
+const U1_KEY = "sb_publishable_FkXGcrW11omd7hyqf0pEZA_rYVEXu_m";
+let u1Timer = null;
+
+const U1_NOMES = { extruder:"Canal 1", extruder1:"Canal 2", extruder2:"Canal 3", extruder3:"Canal 4" };
+const U1_LEGENDA = {
+  load_finish:"Carregado", preload_finish:"Pronto para carregar", wait_insert:"Vazio",
+  preload_fail:"Falha ao carregar", unload_finish:"Descarregado", unload_heating:"Aquecendo para soltar",
+  loading:"Carregando", unloading:"Descarregando", none:"Parado"
+};
+const U1_ERROS = {
+  ok:"", none:"", residual_filament:"Resíduo de filamento preso",
+  preload_fail:"Falhou ao puxar o filamento", entangle:"Filamento embolado", runout:"Filamento acabou"
+};
+
+async function u1Buscar(caminho){
+  const r = await fetch(U1_URL+"/rest/v1/"+caminho, {
+    headers:{ apikey:U1_KEY, Authorization:"Bearer "+U1_KEY }
+  });
+  if(!r.ok) throw new Error("http "+r.status);
+  return await r.json();
+}
+
+function u1Chip(texto, cor){
+  return '<span style="display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;background:'+cor+'22;color:'+cor+';border:1px solid '+cor+'55">'+texto+'</span>';
+}
+
+async function u1Carregar(){
+  const elStatus = document.getElementById('u1Status');
+  const elPing = document.getElementById('u1Ping');
+  try{
+    const linhas = await u1Buscar("u1_estado?id=eq.1&select=atualizado_em,payload");
+    if(!linhas.length){ elStatus.textContent="Nenhuma leitura registrada ainda."; return; }
+
+    const est = linhas[0];
+    const s = (est.payload && est.payload.status) || {};
+    const idade = (Date.now() - new Date(est.atualizado_em).getTime())/1000;
+    const viva = idade < 60;
+
+    elPing.innerHTML = viva ? u1Chip("ao vivo","#2ed47a") : u1Chip("sem sinal","#ff5d6c");
+
+    const ps = s.print_stats || {};
+    const sd = s.virtual_sdcard || {};
+    const mesa = s.heater_bed || {};
+    let topo = "";
+    if(ps.state === "printing"){
+      const pct = Math.round((sd.progress||0)*100);
+      topo = '<div style="font-weight:700;font-size:15px;margin-bottom:6px">Imprimindo</div>'
+        + '<div style="font-size:13px;color:var(--muted);margin-bottom:10px">'+(ps.filename||"")+'</div>'
+        + '<div style="background:var(--line);border-radius:999px;height:10px;overflow:hidden">'
+        + '<div style="width:'+pct+'%;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand-soft))"></div></div>'
+        + '<div style="margin-top:8px;font-size:13px">'+pct+'% concluído</div>';
+    } else {
+      topo = '<div style="font-weight:700;font-size:15px">'+(ps.state==="standby"?"Parada, pronta para imprimir":(ps.state||"—"))+'</div>';
+    }
+    topo += '<div style="margin-top:10px;font-size:13px;color:var(--muted)">Mesa: '
+      + (mesa.temperature!=null?mesa.temperature.toFixed(0):"—") + '°'
+      + (mesa.target ? ' / '+mesa.target.toFixed(0)+'°' : '')
+      + ' &nbsp;·&nbsp; leitura de ' + new Date(est.atualizado_em).toLocaleTimeString('pt-BR') + '</div>';
+    if(!viva){
+      topo += '<div style="margin-top:10px;font-size:12px;color:var(--amber)">A ponte no PC parece desligada. Os dados abaixo são da última leitura.</div>';
+    }
+    elStatus.innerHTML = topo;
+
+    // canais
+    const feeds = Object.assign({}, s["filament_feed left"]||{}, s["filament_feed right"]||{});
+    const mapa = { extruder0:"extruder", extruder1:"extruder1", extruder2:"extruder2", extruder3:"extruder3" };
+    let hc = "";
+    ["extruder0","extruder1","extruder2","extruder3"].forEach((k,i)=>{
+      const f = feeds[k]; if(!f) return;
+      const ex = s[mapa[k]] || {};
+      const erro = U1_ERROS[f.channel_error] || (f.channel_error!=="ok" ? f.channel_error : "");
+      const cor = erro ? "#ff5d6c" : (f.filament_detected ? "#2ed47a" : "#8095b4");
+      hc += '<div class="card" style="padding:13px 15px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+        + '<div style="font-weight:700">Canal '+(i+1)+'</div>'
+        + u1Chip(f.filament_detected?"com filamento":"vazio", cor) + '</div>'
+        + '<div style="margin-top:7px;font-size:13px;color:var(--muted)">'
+        + (U1_LEGENDA[f.channel_state] || f.channel_state || "—") + '</div>'
+        + (erro ? '<div style="margin-top:7px;font-size:13px;color:var(--red);font-weight:600">⚠️ '+erro+'</div>' : '')
+        + (Number(ex.retry_count)>0 ? '<div style="margin-top:6px;font-size:12px;color:var(--amber)">'+ex.retry_count+' tentativas repetidas acumuladas</div>' : '')
+        + '</div>';
+    });
+    document.getElementById('u1Canais').innerHTML = hc || '<div class="card">Sem dados dos canais.</div>';
+
+    // bicos
+    let hb = '<div class="card" style="padding:13px 15px">';
+    ["extruder","extruder1","extruder2","extruder3"].forEach((k,i)=>{
+      const e = s[k]; if(!e) return;
+      const ativo = e.state === "ACTIVATE";
+      hb += '<div style="display:flex;justify-content:space-between;padding:7px 0;'
+        + (i<3?'border-bottom:1px solid var(--line)':'') + '">'
+        + '<span style="font-size:13px">Bico '+(i+1)+(ativo?' <b style="color:var(--brand-soft)">· em uso</b>':'')+'</span>'
+        + '<span style="font-size:13px;font-weight:700">'
+        + (e.temperature!=null?e.temperature.toFixed(0):"—")+'°'
+        + (e.target ? ' / '+e.target.toFixed(0)+'°' : '') + '</span></div>';
+    });
+    hb += '</div>';
+    document.getElementById('u1Bicos').innerHTML = hb;
+
+    // alertas
+    const ev = await u1Buscar("u1_eventos?select=mensagem,recebido_em&order=tempo.desc&limit=250");
+    const ruins = ev.filter(x=>{
+      const m = (x.mensagem||"").toLowerCase();
+      return (m.includes("error") || m.includes("fail") || m.includes("residual") || m.includes("anomaly") || m.includes("!!") )
+        && !m.startsWith("b:");
+    }).slice(0,12);
+    document.getElementById('u1Alertas').innerHTML = ruins.length
+      ? '<div class="card" style="padding:13px 15px">' + ruins.map(x=>
+          '<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:12px">'
+          + '<span style="color:var(--muted)">'+new Date(x.recebido_em).toLocaleString('pt-BR')+'</span><br>'
+          + (x.mensagem||"").replace(/^\/\/\s*/,"") + '</div>').join('') + '</div>'
+      : '<div class="card" style="font-size:13px;color:var(--muted)">Nenhum alerta recente. Tudo tranquilo.</div>';
+
+  }catch(err){
+    elStatus.innerHTML = '<div style="font-size:13px;color:var(--red)">Não consegui ler a impressora.</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-top:6px">Verifique se o PC da oficina está ligado com a ponte rodando.</div>';
+    elPing.innerHTML = u1Chip("sem sinal","#ff5d6c");
+  }
+}
+
+function u1Ativar(){ u1Carregar(); if(u1Timer) clearInterval(u1Timer); u1Timer = setInterval(u1Carregar, 10000); }
+function u1Desativar(){ if(u1Timer){ clearInterval(u1Timer); u1Timer=null; } }
+
 function go(t){
   document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   if(t==='graf') setTimeout(renderGraficos,50);
+  if(t==='u1') u1Ativar(); else u1Desativar();
   window.scrollTo(0,0);
 }
 
