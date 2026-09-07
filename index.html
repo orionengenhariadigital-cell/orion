@@ -746,6 +746,7 @@
   <section id="tab-u1">
     <button class="act ghost" style="margin-top:0" onclick="window.open('http://192.168.68.84/webcam/','_blank')">📹 Ver câmera da U1</button>
     <div id="u1Gasto"></div>
+    <div id="u1Vinculo"></div>
     <h2 class="sec">Impressora U1 <span class="count" id="u1Ping">—</span></h2>
     <div class="card" id="u1Topo">
       <div id="u1Status" style="font-size:13px;color:var(--muted)">Carregando…</div>
@@ -1322,7 +1323,137 @@ async function u1CarregarGasto(){
   }
 }
 
-function u1Ativar(){ u1Carregar(); u1CarregarGasto(); if(u1Timer) clearInterval(u1Timer); u1Timer = setInterval(function(){ u1Carregar(); u1CarregarGasto(); }, 10000); }
+/* ====== VINCULO CANAL x ROLO + BAIXA AUTOMATICA ====== */
+function u1Esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+async function u1Enviar(caminho, metodo, corpo, prefer){
+  const r = await fetch(U1_URL+"/rest/v1/"+caminho, {
+    method: metodo,
+    headers: {
+      apikey: U1_KEY,
+      Authorization: "Bearer "+U1_KEY,
+      "Content-Type": "application/json",
+      Prefer: prefer || "return=representation"
+    },
+    body: corpo ? JSON.stringify(corpo) : undefined
+  });
+  if(!r.ok) throw new Error("http "+r.status);
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+
+let _u1Vinculos = [];
+
+async function u1CarregarVinculos(){
+  const el = document.getElementById('u1Vinculo');
+  if(!el) return;
+  try{
+    _u1Vinculos = await u1Buscar("u1_canal_rolo?select=*&order=canal.asc");
+  }catch(e){ el.innerHTML = ''; return; }
+  const opts = function(sel){
+    return '<option value="">- sem rolo vinculado -</option>' +
+      filsOrd().map(function(f){
+        return '<option value="'+u1Esc(f.id)+'"'+(String(f.id)===String(sel)?' selected':'')+'>'+u1Esc(nomeFil(f))+' - '+u1Esc(f.tipo)+'</option>';
+      }).join('');
+  };
+  let h = '<div class="card" style="padding:15px">'
+    + '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700">Rolo em cada canal</div>'
+    + '<div style="font-size:12px;color:var(--muted);margin:4px 0 10px">Sem isso o app nao sabe de qual rolo descontar quando a impress\u00e3o termina.</div>';
+  [1,2,3,4].forEach(function(c){
+    const v = _u1Vinculos.filter(function(x){ return x.canal===c; })[0] || {};
+    h += '<div style="margin-bottom:9px">'
+      + '<label style="font-size:12px;color:var(--muted)">Canal '+c+'</label>'
+      + '<select onchange="u1SalvarVinculo('+c+',this.value)">'+opts(v.filamento_id)+'</select>'
+      + '</div>';
+  });
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function u1SalvarVinculo(canal, filId){
+  const f = db.filamentos.find(function(x){ return String(x.id)===String(filId); });
+  try{
+    await u1Enviar("u1_canal_rolo?canal=eq."+canal, "PATCH", {
+      filamento_id: filId || null,
+      filamento_nome: f ? (nomeFil(f)+' - '+f.tipo) : null,
+      atualizado_em: new Date().toISOString()
+    }, "return=minimal");
+    toast('Canal '+canal+' vinculado');
+    await u1CarregarVinculos();
+  }catch(e){ toast('N\u00e3o deu para salvar o v\u00ednculo', true); }
+}
+
+let _u1Baixando = false;
+async function u1BaixaAutomatica(){
+  if(_u1Baixando) return;
+  if(!_u1Vinculos.length) return;
+  _u1Baixando = true;
+  try{
+    let pend = [];
+    try{
+      pend = await u1Buscar("u1_impressoes?select=id,arquivo,estado,gcode_meta&estado=in.(complete,concluida)&baixado=eq.false&gcode_meta=not.is.null&order=id.asc&limit=10");
+    }catch(e){ return; }
+    if(!pend || !pend.length) return;
+
+    for(const imp of pend){
+      const pesos = (imp.gcode_meta && imp.gcode_meta.filament_weight) || [];
+      if(!pesos.length) continue;
+
+      const baixas = [];
+      let faltaVinculo = false;
+      pesos.forEach(function(g, i){
+        const gg = +g || 0;
+        if(gg <= 0) return;
+        const vc = _u1Vinculos.filter(function(x){ return x.canal === i+1; })[0];
+        if(!vc || !vc.filamento_id){ faltaVinculo = true; return; }
+        const f = db.filamentos.find(function(x){ return String(x.id)===String(vc.filamento_id); });
+        if(!f){ faltaVinculo = true; return; }
+        baixas.push({ canal:i+1, filId:f.id, g:Math.round(gg*100)/100 });
+      });
+
+      if(faltaVinculo){
+        toast('Impress\u00e3o pronta para baixa, mas falta vincular canal e rolo', true);
+        continue;
+      }
+      if(!baixas.length) continue;
+
+      let reservado = null;
+      try{
+        reservado = await u1Enviar("u1_impressoes?id=eq."+imp.id+"&baixado=eq.false", "PATCH",
+          { baixado:true, baixado_em:new Date().toISOString(), baixa_detalhe:baixas }, "return=representation");
+      }catch(e){ continue; }
+      if(!reservado || !reservado.length) continue;
+
+      const porRolo = {};
+      baixas.forEach(function(b){ porRolo[b.filId] = (porRolo[b.filId]||0) + b.g; });
+      let erro = false;
+      for(const filId of Object.keys(porRolo)){
+        const f = db.filamentos.find(function(x){ return String(x.id)===String(filId); });
+        if(!f) continue;
+        const novo = Math.round(((+f.restante) - porRolo[filId])*100)/100;
+        const r = await sb.from('filamentos').update({ restante: novo }).eq('id', f.id);
+        if(r.error){ erro = true; toast('Erro ao baixar estoque: '+r.error.message, true); continue; }
+        f.restante = novo;
+      }
+      if(erro) continue;
+
+      const totalG = baixas.reduce(function(a,b){ return a+b.g; }, 0);
+      await logAcao('Baixa autom\u00e1tica da U1: '+(imp.arquivo||'')+' ('+totalG.toFixed(1)+' g)', 'u1',
+                    { u1_id: imp.id, baixas: baixas });
+      toast('Estoque baixado: '+totalG.toFixed(1)+' g');
+      await carregarTudo();
+    }
+  } finally {
+    _u1Baixando = false;
+  }
+}
+
+function u1Ativar(){
+  u1Carregar(); u1CarregarGasto();
+  u1CarregarVinculos().then(u1BaixaAutomatica);
+  if(u1Timer) clearInterval(u1Timer);
+  u1Timer = setInterval(function(){ u1Carregar(); u1CarregarGasto(); u1BaixaAutomatica(); }, 10000);
+}
 function u1Desativar(){ if(u1Timer){ clearInterval(u1Timer); u1Timer=null; } }
 
 function go(t){
@@ -2749,6 +2880,14 @@ async function reverter(histId){
         const f=db.filamentos.find(x=>x.id===b.filId);
         if(f) await sb.from('filamentos').update({restante:(+f.restante)+b.g}).eq('id',f.id);
       }
+    }
+    else if(h.tipo==='u1'){
+      // desfaz a baixa automatica da U1: devolve filamento e libera a impressao
+      for(const b of (s.baixas||[])){
+        const f=db.filamentos.find(x=>x.id===b.filId);
+        if(f) await sb.from('filamentos').update({restante:(+f.restante)+b.g}).eq('id',f.id);
+      }
+      if(s.u1_id){ try{ await u1Enviar('u1_impressoes?id=eq.'+s.u1_id,'PATCH',{baixado:false,baixado_em:null,baixa_detalhe:null},'return=minimal'); }catch(e){} }
     }
     else if(h.tipo==='perda'){
       if(s.pd_id) await sb.from('perdas').delete().eq('id',s.pd_id);
