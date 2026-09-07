@@ -2943,6 +2943,36 @@ document.addEventListener('focusout',e=>{
 });
 
 checkSession();
+
+/* ====== AUTO-ATUALIZAR QUANDO SAI VERSAO NOVA ====== */
+(function(){
+  var ARQ = location.pathname.replace(/[^\/]*$/,"") + "index.html";
+  var marca = null, ocupado = false;
+  function ler(){
+    return fetch(ARQ + "?ck=" + Date.now(), {method:"HEAD", cache:"no-store"})
+      .then(function(r){ return r.ok ? (r.headers.get("etag") || r.headers.get("last-modified") || null) : null; })
+      .catch(function(){ return null; });
+  }
+  function checar(){
+    if(ocupado || navigator.onLine === false) return;
+    ocupado = true;
+    ler().then(function(m){
+      ocupado = false;
+      if(!m) return;
+      if(marca === null){ marca = m; return; }
+      if(m === marca) return;
+      if(typeof _saving !== "undefined" && _saving) return;   // nunca recarrega no meio de uma gravacao
+      var t = 0; try{ t = +sessionStorage.getItem("orion_upd") || 0; }catch(e){}
+      if(Date.now() - t < 20000) return;                      // trava anti-loop
+      try{ sessionStorage.setItem("orion_upd", String(Date.now())); }catch(e){}
+      location.replace(location.pathname + "?v=" + Date.now());
+    });
+  }
+  checar();
+  setInterval(checar, 60000);
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) checar(); });
+  window.addEventListener("online", checar);
+})();
 </script>
 <!-- ====== PAINEL CLIENTES DO GESTOR (SaaS) ====== -->
 <div id="g_overlay" style="display:none;position:fixed;inset:0;background:#070b14;z-index:90000;overflow:auto;color:#eaf1ff;font-family:inherit">
