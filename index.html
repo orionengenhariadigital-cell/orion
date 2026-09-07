@@ -1343,6 +1343,21 @@ async function u1Enviar(caminho, metodo, corpo, prefer){
 }
 
 let _u1Vinculos = [];
+let _u1MetaCanais = null;
+
+const U1_TIPOS = ['PLA','PETG','ABS','ASA','TPU','Nylon','PC','PLA-CF','PETG-CF','HIPS','PVA','Outros'];
+
+function u1CanalTipo(c){
+  if(!_u1MetaCanais || !_u1MetaCanais.filament_type) return '';
+  const t = (String(_u1MetaCanais.filament_type).split(';')[c-1] || '').trim().toUpperCase();
+  const achou = U1_TIPOS.filter(function(x){ return x.toUpperCase()===t; })[0];
+  return achou || '';
+}
+function u1CanalHex(c){
+  if(!_u1MetaCanais || !_u1MetaCanais.filament_colour) return '#1f8fff';
+  const h = (String(_u1MetaCanais.filament_colour).split(';')[c-1] || '').trim().replace('#','');
+  return /^[0-9a-fA-F]{6}/.test(h) ? ('#'+h.substring(0,6).toLowerCase()) : '#1f8fff';
+}
 
 async function u1CarregarVinculos(){
   const el = document.getElementById('u1Vinculo');
@@ -1350,20 +1365,30 @@ async function u1CarregarVinculos(){
   try{
     _u1Vinculos = await u1Buscar("u1_canal_rolo?select=*&order=canal.asc");
   }catch(e){ el.innerHTML = ''; return; }
+  try{
+    const ult = await u1Buscar("u1_impressoes?select=gcode_meta&gcode_meta=not.is.null&order=id.desc&limit=1");
+    _u1MetaCanais = (ult && ult[0] && ult[0].gcode_meta) || null;
+  }catch(e){ _u1MetaCanais = null; }
+
   const opts = function(sel){
     return '<option value="">- sem rolo vinculado -</option>' +
       filsOrd().map(function(f){
         return '<option value="'+u1Esc(f.id)+'"'+(String(f.id)===String(sel)?' selected':'')+'>'+u1Esc(nomeFil(f))+' - '+u1Esc(f.tipo)+'</option>';
-      }).join('');
+      }).join('') +
+      '<option value="__novo">+ cadastrar rolo novo</option>';
   };
   let h = '<div class="card" style="padding:15px">'
     + '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700">Rolo em cada canal</div>'
-    + '<div style="font-size:12px;color:var(--muted);margin:4px 0 10px">Sem isso o app nao sabe de qual rolo descontar quando a impress\u00e3o termina.</div>';
+    + '<div style="font-size:12px;color:var(--muted);margin:4px 0 10px">Sem isso o app nao sabe de qual rolo descontar quando a impressão termina.</div>';
   [1,2,3,4].forEach(function(c){
     const v = _u1Vinculos.filter(function(x){ return x.canal===c; })[0] || {};
+    const tipoImp = u1CanalTipo(c);
     h += '<div style="margin-bottom:9px">'
-      + '<label style="font-size:12px;color:var(--muted)">Canal '+c+'</label>'
-      + '<select onchange="u1SalvarVinculo('+c+',this.value)">'+opts(v.filamento_id)+'</select>'
+      + '<label style="font-size:12px;color:var(--muted)">Canal '+c
+      + (tipoImp ? ' <span style="color:var(--brand-soft)">· impressora diz: '+u1Esc(tipoImp)+'</span>' : '')
+      + '</label>'
+      + '<select id="u1sel'+c+'" onchange="u1SalvarVinculo('+c+',this.value)">'+opts(v.filamento_id)+'</select>'
+      + '<div id="u1novo'+c+'" style="display:none"></div>'
       + '</div>';
   });
   h += '</div>';
@@ -1371,6 +1396,7 @@ async function u1CarregarVinculos(){
 }
 
 async function u1SalvarVinculo(canal, filId){
+  if(filId === '__novo'){ u1AbrirNovoRolo(canal); return; }
   const f = db.filamentos.find(function(x){ return String(x.id)===String(filId); });
   try{
     await u1Enviar("u1_canal_rolo?canal=eq."+canal, "PATCH", {
@@ -1380,7 +1406,94 @@ async function u1SalvarVinculo(canal, filId){
     }, "return=minimal");
     toast('Canal '+canal+' vinculado');
     await u1CarregarVinculos();
-  }catch(e){ toast('N\u00e3o deu para salvar o v\u00ednculo', true); }
+  }catch(e){ toast('Não deu para salvar o vínculo', true); }
+}
+
+function u1AbrirNovoRolo(canal){
+  const box = document.getElementById('u1novo'+canal);
+  if(!box) return;
+  const sel = document.getElementById('u1sel'+canal);
+  const atual = (_u1Vinculos.filter(function(x){ return x.canal===canal; })[0] || {}).filamento_id || '';
+  if(sel) sel.value = atual;
+  const tipoImp = u1CanalTipo(canal);
+  const hexImp = u1CanalHex(canal);
+  box.innerHTML =
+      '<div style="border:1px solid var(--line);border-radius:11px;padding:12px;margin-top:8px">'
+    + '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Rolo novo no canal '+canal
+    + (tipoImp ? ' — puxei o tipo e a cor da impressora, confira' : '') + '</div>'
+    + '<label style="font-size:12px;color:var(--muted)">Material</label>'
+    + '<select id="u1nt'+canal+'">' + U1_TIPOS.map(function(t){
+        return '<option'+(t===tipoImp?' selected':'')+'>'+t+'</option>';
+      }).join('') + '</select>'
+    + '<label style="font-size:12px;color:var(--muted);display:block;margin-top:8px">Nome da cor</label>'
+    + '<div style="display:flex;gap:8px">'
+    +   '<input id="u1nc'+canal+'" type="text" placeholder="Ex: Preto Master Print" autocomplete="off" style="flex:1">'
+    +   '<input id="u1nh'+canal+'" type="color" value="'+hexImp+'" style="width:54px;height:46px;padding:2px;border-radius:10px;cursor:pointer;flex:0 0 auto">'
+    + '</div>'
+    + '<label style="font-size:12px;color:var(--muted);display:block;margin-top:8px">Etiqueta (opcional)</label>'
+    + '<input id="u1ne'+canal+'" type="text" placeholder="Ex: rolo 2, sobra 300g" autocomplete="off">'
+    + '<div style="display:flex;gap:8px;margin-top:8px">'
+    +   '<div style="flex:1"><label style="font-size:12px;color:var(--muted)">Quantidade (g)</label>'
+    +     '<input id="u1nq'+canal+'" type="text" inputmode="decimal" placeholder="ex: 1000"></div>'
+    +   '<div style="flex:1"><label style="font-size:12px;color:var(--muted)">Preço pago (R$)</label>'
+    +     '<input id="u1np'+canal+'" type="text" inputmode="decimal" placeholder="0,00"></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:10px">'
+    +   '<button class="act ghost" style="flex:1;margin-top:0" onclick="u1FecharNovoRolo('+canal+')">Cancelar</button>'
+    +   '<button class="act green" style="flex:1;margin-top:0" onclick="guard(function(){return u1SalvarNovoRolo('+canal+')})">Salvar e vincular</button>'
+    + '</div>'
+    + '</div>';
+  box.style.display = 'block';
+}
+
+function u1FecharNovoRolo(canal){
+  const box = document.getElementById('u1novo'+canal);
+  if(box){ box.style.display='none'; box.innerHTML=''; }
+}
+
+async function u1SalvarNovoRolo(canal){
+  const tipo = document.getElementById('u1nt'+canal).value;
+  const cor  = (document.getElementById('u1nc'+canal).value||'').trim();
+  const hex  = document.getElementById('u1nh'+canal).value||'';
+  const tag  = (document.getElementById('u1ne'+canal).value||'').trim();
+  const qtd  = numF(document.getElementById('u1nq'+canal).value)||0;
+  const prc  = numF(document.getElementById('u1np'+canal).value)||0;
+  if(!cor){ toast('Dê um nome para a cor', true); return; }
+  if(qtd<=0){ toast('Informe a quantidade em gramas', true); return; }
+  toast('Salvando...');
+
+  const existe = db.filamentos.find(function(x){
+    return x.tipo===tipo && (x.cor||'').toLowerCase()===cor.toLowerCase() && (x.etiqueta||'').toLowerCase()===tag.toLowerCase();
+  });
+  let novoId = null;
+  if(existe){
+    const r = await sb.from('filamentos').update({
+      qtd_inicial:(+existe.qtd_inicial)+qtd, restante:(+existe.restante)+qtd,
+      preco_total:(+existe.preco_total)+prc, cor_hex:hex||existe.cor_hex
+    }).eq('id',existe.id);
+    if(r.error){ toast('Erro: '+r.error.message, true); return; }
+    novoId = existe.id;
+    await logAcao('Reabasteceu filamento pelo canal '+canal+': '+cor+' '+tipo,'filamento',{
+      modo:'update', id:existe.id,
+      antes:{qtd_inicial:existe.qtd_inicial,restante:existe.restante,preco_total:existe.preco_total},
+      add_qtd:qtd, add_preco:prc
+    });
+  }else{
+    const r = await sb.from('filamentos').insert({
+      tipo, cor, etiqueta:tag, cor_hex:hex, qtd_inicial:qtd, restante:qtd, preco_total:prc
+    }).select('id').single();
+    if(r.error){ toast('Erro: '+r.error.message, true); return; }
+    novoId = r.data && r.data.id;
+    await logAcao('Cadastrou filamento pelo canal '+canal+': '+cor+' '+tipo,'filamento',{
+      modo:'insert', id:novoId, add_qtd:qtd, add_preco:prc
+    });
+  }
+
+  u1FecharNovoRolo(canal);
+  await carregarTudo();
+  if(novoId) await u1SalvarVinculo(canal, novoId);
+  else await u1CarregarVinculos();
+  toast('Rolo cadastrado e vinculado ao canal '+canal);
 }
 
 let _u1Baixando = false;
