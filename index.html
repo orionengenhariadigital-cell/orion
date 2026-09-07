@@ -745,6 +745,7 @@
   </section>
   <section id="tab-u1">
     <button class="act ghost" style="margin-top:0" onclick="window.open('http://192.168.68.84/webcam/','_blank')">📹 Ver câmera da U1</button>
+    <div id="u1Gasto"></div>
     <h2 class="sec">Impressora U1 <span class="count" id="u1Ping">—</span></h2>
     <div class="card" id="u1Topo">
       <div id="u1Status" style="font-size:13px;color:var(--muted)">Carregando…</div>
@@ -1243,7 +1244,85 @@ async function u1Carregar(){
   }
 }
 
-function u1Ativar(){ u1Carregar(); if(u1Timer) clearInterval(u1Timer); u1Timer = setInterval(u1Carregar, 10000); }
+/* ====== FILAMENTO GASTO NA U1 ====== */
+const U1_DENS = { PLA:1.24, PETG:1.27, TPU:1.21, ABS:1.04, ASA:1.07, PC:1.20, PA:1.14, NYLON:1.14, PVA:1.23, HIPS:1.04 };
+const U1_AREA = Math.PI * Math.pow(1.75/2, 2);
+function u1G(mm, dens){ return mm * U1_AREA * dens / 1000; }
+function u1Materiais(imp){
+  const c = imp.canais || {};
+  const usados = c.extruders_used || [];
+  const tipos = c.filament_type || [];
+  const out = [];
+  usados.forEach(function(u,i){ if(u && tipos[i] && out.indexOf(tipos[i])<0) out.push(tipos[i]); });
+  return out;
+}
+function u1Peso(imp){
+  const mm = +imp.filamento_mm || 0;
+  const mats = u1Materiais(imp);
+  const ds = mats.map(function(m){ return U1_DENS[(m||"").toUpperCase()]; }).filter(function(x){ return x; });
+  if(!ds.length) return { mm:mm, mats:mats, min:null, max:null, exato:false };
+  const dmin = Math.min.apply(null, ds), dmax = Math.max.apply(null, ds);
+  return { mm:mm, mats:mats, min:u1G(mm,dmin), max:u1G(mm,dmax), exato: dmin===dmax };
+}
+function u1PesoTxt(p){
+  if(p.min===null) return Math.round(p.mm) + " mm";
+  if(p.exato) return p.max.toFixed(1).replace(".",",") + " g";
+  return p.min.toFixed(1).replace(".",",") + " a " + p.max.toFixed(1).replace(".",",") + " g";
+}
+function u1Dur(s){
+  s = Math.round(+s||0);
+  const h = Math.floor(s/3600), m = Math.round((s%3600)/60);
+  return h ? (h+"h"+(m?(" "+m+"min"):"")) : (m+" min");
+}
+const U1_ESTADO = { imprimindo:"Imprimindo", printing:"Imprimindo", cancelled:"Cancelada", complete:"Conclu\u00edda", concluida:"Conclu\u00edda", error:"Erro", standby:"Parada" };
+async function u1CarregarGasto(){
+  const el = document.getElementById('u1Gasto');
+  if(!el) return;
+  try{
+    const imps = await u1Buscar("u1_impressoes?select=id,arquivo,estado,iniciada_em,finalizada_em,filamento_mm,duracao_s,canais&order=id.desc&limit=20");
+    if(!imps.length){ el.innerHTML = '<div class="card" style="font-size:13px;color:var(--muted)">Nenhuma impress\u00e3o registrada ainda.</div>'; return; }
+    const agora = new Date();
+    let mesMin = 0, mesMax = 0, mesQtd = 0, temFaixa = false;
+    imps.forEach(function(x){
+      const d = new Date(x.iniciada_em);
+      if(d.getMonth()===agora.getMonth() && d.getFullYear()===agora.getFullYear()){
+        const p = u1Peso(x);
+        if(p.min!==null){ mesMin += p.min; mesMax += p.max; if(!p.exato) temFaixa = true; }
+        mesQtd++;
+      }
+    });
+    const atual = imps.filter(function(x){ return !x.finalizada_em; })[0];
+    let h = '<div class="card" style="padding:15px">';
+    h += '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700">Filamento gasto</div>';
+    if(atual){
+      const p = u1Peso(atual);
+      h += '<div style="font-size:26px;font-weight:800;margin-top:6px;line-height:1.1">' + u1PesoTxt(p) + '</div>'
+         + '<div style="font-size:12px;color:var(--muted);margin-top:3px">na impress\u00e3o de agora &middot; ' + (atual.arquivo||"") + '</div>';
+    } else {
+      h += '<div style="font-size:26px;font-weight:800;margin-top:6px;line-height:1.1">&mdash;</div>'
+         + '<div style="font-size:12px;color:var(--muted);margin-top:3px">nenhuma impress\u00e3o em curso</div>';
+    }
+    h += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px">'
+       + 'Neste m\u00eas: <b>' + (temFaixa ? (mesMin.toFixed(0)+" a "+mesMax.toFixed(0)) : mesMax.toFixed(0)) + ' g</b>'
+       + ' <span style="color:var(--muted)">&middot; ' + mesQtd + (mesQtd===1?' impress\u00e3o':' impress\u00f5es') + '</span></div>';
+    h += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">';
+    imps.slice(0,8).forEach(function(x){
+      const p = u1Peso(x);
+      h += '<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)">'
+        + '<div style="min-width:0"><div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (x.arquivo||"-") + '</div>'
+        + '<div style="font-size:11px;color:var(--muted)">' + new Date(x.iniciada_em).toLocaleDateString('pt-BR') + ' &middot; ' + (U1_ESTADO[x.estado]||x.estado||"-") + ' &middot; ' + u1Dur(x.duracao_s) + '</div></div>'
+        + '<div style="font-size:13px;font-weight:700;white-space:nowrap">' + u1PesoTxt(p) + '</div></div>';
+    });
+    h += '</div>';
+    h += '<div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.45">A impressora informa s\u00f3 o total da impress\u00e3o, n\u00e3o quanto saiu de cada canal. Por isso o app <b>n\u00e3o d\u00e1 baixa no estoque</b> sozinho: quando a pe\u00e7a usa canais de materiais diferentes, o peso aparece como faixa.</div>';
+    h += '</div>';
+    el.innerHTML = h;
+  }catch(e){
+    el.innerHTML = '<div class="card" style="font-size:13px;color:var(--muted)">N\u00e3o deu para ler as impress\u00f5es da U1.</div>';
+  }
+}
+
+function u1Ativar(){ u1Carregar(); u1CarregarGasto(); if(u1Timer) clearInterval(u1Timer); u1Timer = setInterval(function(){ u1Carregar(); u1CarregarGasto(); }, 10000); }
 function u1Desativar(){ if(u1Timer){ clearInterval(u1Timer); u1Timer=null; } }
 
 function go(t){
